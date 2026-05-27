@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment variables — NEVER commit secrets
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs/
+*.log
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Uploads (keep folder structure only)
+uploads/**
+!uploads/.gitkeep
+!uploads/logos/
+!uploads/logos/.gitkeep
+
+# OS
+.DS_Store
+Thumbs.db

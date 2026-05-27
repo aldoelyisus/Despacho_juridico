@@ -1,0 +1,78 @@
+.agenda-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+}
+
+.agenda-calendar-card {
+  overflow: hidden;
+}
+
+/* FullCalendar theme override */
+.fc {
+  --fc-border-color: var(--border-subtle);
+  --fc-button-bg-color: var(--bg-elevated);
+  --fc-button-border-color: var(--border-default);
+  --fc-button-hover-bg-color: var(--bg-hover);
+  --fc-button-active-bg-color: var(--accent-600);
+  --fc-button-active-border-color: var(--accent-600);
+  --fc-today-bg-color: rgba(99,102,241,0.08);
+  --fc-now-indicator-color: var(--accent-500);
+  --fc-page-bg-color: transparent;
+  --fc-neutral-bg-color: var(--bg-elevated);
+  --fc-list-event-hover-bg-color: var(--bg-hover);
+  font-family: var(--font-body) !important;
+}
+
+.fc .fc-toolbar-title {
+  font-family: var(--font-heading);
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.fc .fc-button {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 500;
+  border-radius: var(--radius-md) !important;
+  padding: 0.375rem 0.75rem;
+  transition: all var(--transition-fast);
+}
+
+.fc .fc-button:hover { color: var(--text-primary); }
+.fc .fc-button-primary:not(:disabled).fc-button-active {
+  background: var(--accent-600) !important;
+  border-color: var(--accent-600) !important;
+  color: #fff !important;
+}
+
+.fc .fc-col-header-cell-cushion {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: var(--sp-2) 0;
+}
+
+.fc .fc-daygrid-day-number {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  padding: var(--sp-2);
+}
+
+.fc .fc-daygrid-day.fc-day-today .fc-daygrid-day-number { color: var(--accent-400); font-weight: 700; }
+
+.fc .fc-event {
+  border-radius: var(--radius-sm) !important;
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 1px 4px;
+  border: none !important;
+}
+
+.fc .fc-list-event:hover td { background: var(--bg-hover) !important; }
+.fc .fc-list-day-cushion { background: var(--bg-elevated) !important; color: var(--text-secondary); }
+.fc th { border-color: var(--border-subtle) !important; }
+.fc td { border-color: var(--border-subtle) !important; }
