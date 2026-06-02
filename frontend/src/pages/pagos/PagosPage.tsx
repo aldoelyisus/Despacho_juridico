@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, X, Loader2, CreditCard, DollarSign, FileText, Receipt } from 'lucide-react';
+import { Plus, X, Loader2, CreditCard, DollarSign, FileText, Receipt, Tag } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { pagosApi } from '../../api/pagos.api';
 import { clientesApi } from '../../api/clientes.api';
 import { catalogosApi } from '../../api/catalogos.api';
 import { expedientesApi } from '../../api/expedientes.api';
+import { descuentosApi } from '../../api/descuentos.api';
 
 const ESTADO_COLORS: Record<string, string> = {
   pendiente: 'badge-warning', parcial: 'badge-info',
@@ -13,7 +14,7 @@ const ESTADO_COLORS: Record<string, string> = {
 };
 
 const FORM_INIT = {
-  clienteId: '', expedienteId: '', servicioId: '',
+  clienteId: '', expedienteId: '', servicioId: '', descuentoId: '',
   concepto: '', fechaVencimiento: '', notas: '',
 };
 
@@ -25,6 +26,7 @@ export default function PagosPage() {
   const [estadoFilter, setEstadoFilter] = useState('');
   const [form, setForm] = useState(FORM_INIT);
   const [servicioSeleccionado, setServicioSeleccionado] = useState<any>(null);
+  const [descuentoSeleccionado, setDescuentoSeleccionado] = useState<any>(null);
   const [abonoForm, setAbonoForm] = useState({
     monto: '', fechaPago: new Date().toISOString().split('T')[0],
     metodoPago: 'Efectivo', referencia: '',
@@ -49,6 +51,10 @@ export default function PagosPage() {
     queryFn: () => expedientesApi.list({ clienteId: form.clienteId, limite: 100 }),
     enabled: !!form.clienteId,
   });
+  const { data: descuentos } = useQuery({
+    queryKey: ['descuentos-activos'],
+    queryFn: () => descuentosApi.list({ activos: true }),
+  });
 
   // Cuando cambia el servicio seleccionado, actualizar objeto para mostrar costo
   useEffect(() => {
@@ -58,6 +64,9 @@ export default function PagosPage() {
     } else {
       setServicioSeleccionado(null);
     }
+    // Reset descuento cuando cambia servicio
+    setForm(f => ({ ...f, descuentoId: '' }));
+    setDescuentoSeleccionado(null);
   }, [form.servicioId, servicios]);
 
   // Al cambiar cliente, limpiar expediente
@@ -68,6 +77,7 @@ export default function PagosPage() {
   const resetModal = () => {
     setForm(FORM_INIT);
     setServicioSeleccionado(null);
+    setDescuentoSeleccionado(null);
     setModalOpen(false);
   };
 
@@ -100,6 +110,7 @@ export default function PagosPage() {
       clienteId: +form.clienteId,
       servicioId: +form.servicioId,
       expedienteId: form.expedienteId ? +form.expedienteId : undefined,
+      descuentoId: form.descuentoId ? +form.descuentoId : undefined,
       concepto: form.concepto || servicioSeleccionado?.nombre,
       fechaVencimiento: form.fechaVencimiento || undefined,
       notas: form.notas || undefined,
@@ -151,6 +162,7 @@ export default function PagosPage() {
               <th>Número</th>
               <th>Cliente ID</th>
               <th>Servicio / Concepto</th>
+              <th>Descuento</th>
               <th>Total</th>
               <th>Pagado</th>
               <th>Pendiente</th>
@@ -172,6 +184,13 @@ export default function PagosPage() {
                 <td><code style={{ fontSize: '0.8rem', color: 'var(--accent-400)' }}>{p.numero}</code></td>
                 <td style={{ fontSize: '0.875rem' }}>{p.clienteId}</td>
                 <td style={{ fontSize: '0.875rem', maxWidth: 200 }}>{p.concepto || '—'}</td>
+                <td>
+                  {Number(p.montoDescuento) > 0 ? (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#f59e0b', fontWeight: 600, fontSize: '0.85rem' }}>
+                      <Tag size={12} /> −${Number(p.montoDescuento).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                    </span>
+                  ) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                </td>
                 <td style={{ fontWeight: 600 }}>${Number(p.montoTotal).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
                 <td style={{ color: 'var(--success)' }}>${Number(p.montoPagado).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
                 <td style={{ color: Number(p.montoPendiente) > 0 ? 'var(--warning)' : 'var(--text-muted)' }}>
@@ -250,6 +269,62 @@ export default function PagosPage() {
                           )}
                         </div>
                       </div>
+                    </div>
+                  )}
+
+                  {/* DESCUENTO — solo si hay servicio seleccionado y hay descuentos disponibles */}
+                  {servicioSeleccionado && (
+                    <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                      <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Tag size={14} /> Descuento <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(opcional — solo uno por cobro)</span>
+                      </label>
+                      <select
+                        id="pago-descuento"
+                        className="form-select"
+                        value={form.descuentoId}
+                        onChange={(e) => {
+                          const id = e.target.value;
+                          setForm(f => ({ ...f, descuentoId: id }));
+                          setDescuentoSeleccionado(descuentos?.find((d: any) => d.id === +id) || null);
+                        }}
+                      >
+                        <option value="">Sin descuento</option>
+                        {descuentos?.map((d: any) => (
+                          <option key={d.id} value={d.id}>
+                            {d.nombre} — {d.tipo === 'porcentaje' ? `${Number(d.valor)}%` : `$${Number(d.valor).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`}
+                          </option>
+                        ))}
+                      </select>
+
+                      {/* Preview de precio con descuento */}
+                      {descuentoSeleccionado && servicioSeleccionado && (() => {
+                        const costo = Number(servicioSeleccionado.costo);
+                        const val = Number(descuentoSeleccionado.valor);
+                        const montoDesc = descuentoSeleccionado.tipo === 'porcentaje'
+                          ? Math.round(costo * val / 100 * 100) / 100
+                          : Math.min(val, costo);
+                        const final = costo - montoDesc;
+                        return (
+                          <div style={{
+                            marginTop: 'var(--sp-2)', padding: 'var(--sp-3)',
+                            background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)',
+                            borderRadius: 'var(--radius-sm)', fontSize: '0.875rem',
+                          }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-muted)' }}>
+                              <span>Precio original</span>
+                              <span>${costo.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', color: '#f59e0b' }}>
+                              <span>Descuento ({descuentoSeleccionado.nombre})</span>
+                              <span>−${montoDesc.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, color: '#10b981', borderTop: '1px solid rgba(245,158,11,0.2)', marginTop: 6, paddingTop: 6, fontSize: '1rem' }}>
+                              <span>Total a cobrar</span>
+                              <span>${final.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
 

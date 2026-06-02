@@ -5,6 +5,7 @@ import { Pago, EstadoPago } from './entities/pago.entity';
 import { PagoDetalle } from './entities/pago-detalle.entity';
 import { Servicio } from '../catalogos/entities/servicio.entity';
 import { Expediente } from '../expedientes/entities/expediente.entity';
+import { DescuentosService } from '../descuentos/descuentos.service';
 
 @Injectable()
 export class PagosService {
@@ -13,7 +14,9 @@ export class PagosService {
     @InjectRepository(PagoDetalle) private detalleRepo: Repository<PagoDetalle>,
     @InjectRepository(Servicio) private servicioRepo: Repository<Servicio>,
     @InjectRepository(Expediente) private expRepo: Repository<Expediente>,
+    private descuentosService: DescuentosService,
   ) {}
+
 
   async findAll(despachoId: number, query: any = {}) {
     const { clienteId, expedienteId, estado, pagina = 1, limite = 20 } = query;
@@ -41,12 +44,25 @@ export class PagosService {
   }
 
   async create(dto: any, despachoId: number, usuarioId: number) {
-    // Obtener costo del servicio seleccionado
     if (!dto.servicioId) throw new BadRequestException('Debe seleccionar un servicio');
     const servicio = await this.servicioRepo.findOne({ where: { id: dto.servicioId, despachoId } });
     if (!servicio) throw new NotFoundException('Servicio no encontrado');
 
-    const montoTotal = Number(servicio.costo);
+    const montoOriginal = Number(servicio.costo);
+    let montoTotal = montoOriginal;
+    let montoDescuento = 0;
+
+    // Aplicar descuento si se proporciona
+    if (dto.descuentoId) {
+      const descuento = await this.descuentosService.findOne(+dto.descuentoId, despachoId);
+      if (!descuento || !descuento.activo) {
+        throw new BadRequestException('El descuento seleccionado no existe o está inactivo');
+      }
+      const calc = this.descuentosService.calcularMontoConDescuento(montoOriginal, descuento);
+      montoDescuento = calc.montoDescuento;
+      montoTotal = calc.montoFinal;
+    }
+
     const count = await this.repo.count({ where: { despachoId } });
     const year = new Date().getFullYear();
     const numero = `REC-${year}-${String(count + 1).padStart(4, '0')}`;
@@ -56,6 +72,8 @@ export class PagosService {
       despachoId,
       usuarioId,
       numero,
+      montoOriginal,
+      montoDescuento,
       montoTotal,
       montoPendiente: montoTotal,
       montoPagado: 0,
@@ -64,7 +82,6 @@ export class PagosService {
     });
     const saved = await this.repo.save(pago);
 
-    // Actualizar monto total del expediente si viene ligado
     if (dto.expedienteId) {
       await this.recalcularTotalExpediente(dto.expedienteId, despachoId);
     }

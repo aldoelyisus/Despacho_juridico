@@ -46,6 +46,16 @@ export class Usuario extends BaseEntity {
   @ApiProperty()
   ultimoAcceso: Date;
 
+  @Column({ name: 'two_factor_secret', length: 200, nullable: true })
+  twoFactorSecret: string;
+
+  @Column({ name: 'two_factor_enabled', default: false })
+  @ApiProperty()
+  twoFactorEnabled: boolean;
+
+  @Column({ name: 'two_factor_backup_codes', type: 'json', nullable: true })
+  twoFactorBackupCodes: string[];
+
   @ManyToOne(() => Despacho, (d) => d.usuarios)
   @JoinColumn({ name: 'despacho_id' })
   despacho: Despacho;

@@ -13,6 +13,7 @@ import { CatalogosModule } from './catalogos/catalogos.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { AuditoriaModule } from './auditoria/auditoria.module';
 import { RootModule } from './root/root.module';
+import { DescuentosModule } from './descuentos/descuentos.module';
 import { AuditInterceptor } from './common/interceptors/audit.interceptor';
 
 @Module({
@@ -45,6 +46,7 @@ import { AuditInterceptor } from './common/interceptors/audit.interceptor';
     DashboardModule,
     AuditoriaModule,
     RootModule,
+    DescuentosModule,
   ],
   providers: [
     {

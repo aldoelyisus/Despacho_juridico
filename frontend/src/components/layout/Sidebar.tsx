@@ -1,9 +1,9 @@
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate, Link } from 'react-router-dom';
 import {
   LayoutDashboard, Users, FolderOpen, Calendar,
   CreditCard, UserCog, BookOpen, Settings,
   ChevronLeft, Scale, LogOut, Activity, Building2,
-  DollarSign, Crown,
+  DollarSign, Crown, ShieldCheck, Tag,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { despachoApi } from '../../api/despacho.api';
@@ -17,6 +17,7 @@ const normalNavItems = [
   { to: '/pagos',        icon: CreditCard,      label: 'Pagos' },
   { separator: true },
   { to: '/catalogos',    icon: BookOpen,        label: 'Catálogos' },
+  { to: '/descuentos',   icon: Tag,             label: 'Descuentos' },
   { to: '/usuarios',     icon: UserCog,         label: 'Usuarios' },
   { to: '/auditoria',    icon: Activity,        label: 'Auditoría' },
   { to: '/configuracion',icon: Settings,        label: 'Configuración' },
@@ -122,15 +123,19 @@ export default function Sidebar({ collapsed, onToggle }: Props) {
       <div className="sidebar-user">
         {!collapsed ? (
           <>
-            <div className="avatar" style={isRoot ? { background: 'linear-gradient(135deg, #f59e0b, #d97706)' } : {}}>
-              {usuario?.nombre?.[0]}{usuario?.apellido?.[0]}
-            </div>
-            <div className="sidebar-user-info">
-              <div className="sidebar-user-name">{usuario?.nombre} {usuario?.apellido}</div>
-              <div className="sidebar-user-role" style={isRoot ? { color: '#f59e0b' } : {}}>
-                {isRoot ? '👑 Root' : usuario?.rol?.nombre}
+            <Link to={isRoot ? '/root/perfil' : '/perfil'} style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, textDecoration: 'none', minWidth: 0 }}>
+              <div className="avatar" style={isRoot ? { background: 'linear-gradient(135deg, #f59e0b, #d97706)', flexShrink: 0 } : { flexShrink: 0 }}>
+                {usuario?.nombre?.[0]}{usuario?.apellido?.[0]}
               </div>
-            </div>
+              <div className="sidebar-user-info" style={{ minWidth: 0 }}>
+                <div className="sidebar-user-name" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{usuario?.nombre} {usuario?.apellido}</span>
+                </div>
+                <div className="sidebar-user-role" style={isRoot ? { color: '#f59e0b' } : {}}>
+                  {isRoot ? '👑 Root' : usuario?.rol?.nombre}
+                </div>
+              </div>
+            </Link>
             <button className="btn btn-ghost btn-icon btn-icon-sm" onClick={handleLogout} data-tooltip="Cerrar sesión">
               <LogOut size={16} />
             </button>

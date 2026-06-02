@@ -16,6 +16,8 @@ import ConfiguracionPage from './pages/configuracion/ConfiguracionPage';
 import RootDashboardPage from './pages/root/RootDashboardPage';
 import RootDespachosPage from './pages/root/RootDespachosPage';
 import RootMensualidadesPage from './pages/root/RootMensualidadesPage';
+import PerfilPage from './pages/perfil/PerfilPage';
+import DescuentosPage from './pages/descuentos/DescuentosPage';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { token } = useAuthStore();
@@ -51,6 +53,7 @@ export default function App() {
         <Route path="dashboard"     element={<RootDashboardPage />} />
         <Route path="despachos"     element={<RootDespachosPage />} />
         <Route path="mensualidades" element={<RootMensualidadesPage />} />
+        <Route path="perfil"        element={<PerfilPage />} />
       </Route>
 
       {/* NORMAL — usuarios de despacho */}
@@ -68,8 +71,10 @@ export default function App() {
         <Route path="pagos"            element={<PagosPage />} />
         <Route path="usuarios"         element={<UsuariosPage />} />
         <Route path="catalogos"        element={<CatalogosPage />} />
+        <Route path="descuentos"       element={<DescuentosPage />} />
         <Route path="auditoria"        element={<AuditoriaPage />} />
         <Route path="configuracion"    element={<ConfiguracionPage />} />
+        <Route path="perfil"           element={<PerfilPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/login" replace />} />

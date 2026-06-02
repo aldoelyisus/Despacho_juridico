@@ -31,6 +31,18 @@ export class Pago extends BaseEntity {
   @ApiProperty()
   usuarioId: number;
 
+  @Column({ name: 'descuento_id', nullable: true })
+  @ApiProperty({ description: 'Descuento aplicado (nullable)' })
+  descuentoId: number;
+
+  @Column({ name: 'monto_descuento', type: 'decimal', precision: 12, scale: 2, default: 0 })
+  @ApiProperty()
+  montoDescuento: number;
+
+  @Column({ name: 'monto_original', type: 'decimal', precision: 12, scale: 2, default: 0 })
+  @ApiProperty({ description: 'Costo del servicio antes del descuento' })
+  montoOriginal: number;
+
   @Column({ length: 100, unique: false })
   @ApiProperty({ example: 'REC-2024-001' })
   numero: string;
