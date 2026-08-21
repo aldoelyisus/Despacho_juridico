@@ -11,6 +11,7 @@ const ACCION_COLORS: Record<string, string> = {
   ACTUALIZAR: 'badge-info',
   ELIMINAR: 'badge-danger',
   BUSCAR: 'badge-info',
+  CAMBIO_ESTADO: 'badge-warning',
 };
 
 export default function AuditoriaPage() {
@@ -47,7 +48,7 @@ export default function AuditoriaPage() {
             onChange={(e) => { setAccionFilter(e.target.value); setPagina(1); }}
           >
             <option value="">Todas las acciones</option>
-            {['CREAR', 'ACTUALIZAR', 'ELIMINAR', 'BUSCAR'].map(a => (
+            {['CREAR', 'ACTUALIZAR', 'ELIMINAR', 'BUSCAR', 'CAMBIO_ESTADO'].map(a => (
               <option key={a} value={a}>{a}</option>
             ))}
           </select>

@@ -9,12 +9,6 @@ import { usuariosApi } from '../../api/usuarios.api';
 import { getErrorMessage } from '../../utils/errors';
 import ModalErrorBanner from '../../components/ModalErrorBanner';
 
-const ESTADOS = ['activo', 'en_proceso', 'cerrado', 'ganado', 'perdido', 'suspendido'];
-const ESTADO_LABELS: Record<string, string> = {
-  activo: 'Activo', en_proceso: 'En proceso', cerrado: 'Cerrado',
-  ganado: 'Ganado', perdido: 'Perdido', suspendido: 'Suspendido',
-};
-
 // ── Encabezado de sección — agrupa visualmente los campos relacionados ──────
 function SectionHeader({ icon: Icon, title }: { icon: any; title: string }) {
   return (
@@ -97,7 +91,6 @@ export default function ExpedienteModal({ expediente, onClose, onSuccess }: any)
     descripcion: expediente?.descripcion || '',
     areaId: expediente?.areaId ? String(expediente.areaId) : '',
     subareaId: expediente?.subareaId ? String(expediente.subareaId) : '',
-    estado: expediente?.estado || 'activo',
     fechaInicio: expediente?.fechaInicio
       ? new Date(expediente.fechaInicio).toISOString().split('T')[0]
       : '',
@@ -168,9 +161,8 @@ export default function ExpedienteModal({ expediente, onClose, onSuccess }: any)
       descripcion: form.descripcion || undefined,
       areaId: form.areaId ? +form.areaId : undefined,
       subareaId: form.subareaId ? +form.subareaId : undefined,
-      estado: form.estado,
       fechaInicio: form.fechaInicio || undefined,
-      fechaCierre: form.fechaCierre || undefined,
+      fechaCierre: isEdit ? (form.fechaCierre || undefined) : undefined,
       notas: form.notas || undefined,
       clienteIds,
       colaboradorIds,
@@ -272,27 +264,31 @@ export default function ExpedienteModal({ expediente, onClose, onSuccess }: any)
 
             <div className="divider" />
 
-            {/* ── FECHAS Y ESTADO ──────────────────────────────────────── */}
-            <SectionHeader icon={CalendarClock} title="Fechas y estado" />
-            <div className="form-grid-3" style={{ marginBottom: isEdit ? 'var(--sp-3)' : 'var(--sp-5)' }}>
-              <div className="form-group">
-                <label className="form-label">Estado</label>
-                <select id="exp-estado" className="form-select" value={form.estado}
-                  onChange={(e) => setForm(f => ({ ...f, estado: e.target.value }))}>
-                  {ESTADOS.map(s => <option key={s} value={s}>{ESTADO_LABELS[s]}</option>)}
-                </select>
-              </div>
+            {/* ── FECHAS ───────────────────────────────────────────────── */}
+            <SectionHeader icon={CalendarClock} title="Fechas" />
+            <div className={isEdit ? 'form-grid-2' : undefined} style={{ marginBottom: isEdit ? 'var(--sp-3)' : 'var(--sp-5)' }}>
               <div className="form-group">
                 <label className="form-label">Fecha de inicio</label>
                 <input id="exp-fecha-inicio" type="date" className="form-input" value={form.fechaInicio}
                   onChange={(e) => setForm(f => ({ ...f, fechaInicio: e.target.value }))} />
               </div>
-              <div className="form-group">
-                <label className="form-label">Fecha de cierre</label>
-                <input id="exp-fecha-cierre" type="date" className="form-input" value={form.fechaCierre}
-                  onChange={(e) => setForm(f => ({ ...f, fechaCierre: e.target.value }))} />
-              </div>
+              {isEdit && (
+                <div className="form-group">
+                  <label className="form-label">Fecha de cierre</label>
+                  <input id="exp-fecha-cierre" type="date" className="form-input" value={form.fechaCierre}
+                    onChange={(e) => setForm(f => ({ ...f, fechaCierre: e.target.value }))} />
+                  <small style={{ color: 'var(--text-muted)', marginTop: 4, display: 'block' }}>
+                    Se completa automáticamente al marcar el expediente como ganado, perdido o cancelado
+                  </small>
+                </div>
+              )}
             </div>
+
+            {isEdit && (
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: 'var(--sp-5)' }}>
+                El estado del expediente se cambia desde su vista de detalle, donde solo se permiten las transiciones válidas.
+              </p>
+            )}
 
             {/* COSTO ACUMULADO — solo lectura en edición */}
             {isEdit && (

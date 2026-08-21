@@ -5,6 +5,13 @@ import { clientesApi } from '../../api/clientes.api';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
+const EXPEDIENTE_ESTADO_COLOR: Record<string, string> = {
+  consulta: 'accent', activo: 'info', ganado: 'success', perdido: 'danger', suspendido: 'warning', cancelado: 'muted',
+};
+const EXPEDIENTE_ESTADO_LABEL: Record<string, string> = {
+  consulta: 'Consulta', activo: 'Activo', ganado: 'Ganado', perdido: 'Perdido', suspendido: 'Suspendido', cancelado: 'Cancelado',
+};
+
 export default function ClienteDetallePage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -62,7 +69,7 @@ export default function ClienteDetallePage() {
                   <div style={{ fontWeight: 500, fontSize: '0.875rem' }}>{e.numero}</div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{e.titulo}</div>
                 </div>
-                <span className={`badge badge-${{ activo: 'success', ganado: 'success', perdido: 'danger', cerrado: 'muted', en_proceso: 'info' }[e.estado] || 'muted'}`}>{e.estado}</span>
+                <span className={`badge badge-${EXPEDIENTE_ESTADO_COLOR[e.estado] || 'muted'}`}>{EXPEDIENTE_ESTADO_LABEL[e.estado] || e.estado}</span>
               </div>
             ))
           ) : (

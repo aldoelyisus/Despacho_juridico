@@ -9,13 +9,13 @@ import ExpedienteModal from './ExpedienteModal';
 import Pagination from '../../components/Pagination';
 
 const ESTADO_COLORS: Record<string, string> = {
-  activo: 'badge-success', en_proceso: 'badge-info', cerrado: 'badge-muted',
-  ganado: 'badge-success', perdido: 'badge-danger', suspendido: 'badge-warning',
+  consulta: 'badge-accent', activo: 'badge-info', ganado: 'badge-success',
+  perdido: 'badge-danger', suspendido: 'badge-warning', cancelado: 'badge-muted',
 };
 
 const ESTADO_LABELS: Record<string, string> = {
-  activo: 'Activo', en_proceso: 'En Proceso', cerrado: 'Cerrado',
-  ganado: 'Ganado', perdido: 'Perdido', suspendido: 'Suspendido',
+  consulta: 'Consulta', activo: 'Activo', ganado: 'Ganado',
+  perdido: 'Perdido', suspendido: 'Suspendido', cancelado: 'Cancelado',
 };
 
 export default function ExpedientesPage() {

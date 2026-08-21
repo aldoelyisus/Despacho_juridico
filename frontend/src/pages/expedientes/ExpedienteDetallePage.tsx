@@ -16,15 +16,26 @@ import ExpedienteModal from './ExpedienteModal';
 import PagoModal from '../pagos/PagoModal';
 import AbonoModal from '../pagos/AbonoModal';
 import ReciboModal from '../pagos/ReciboModal';
+import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 
 const ESTADO_COLORS: Record<string, string> = {
-  activo: 'badge-success', en_proceso: 'badge-info', cerrado: 'badge-muted',
-  ganado: 'badge-success', perdido: 'badge-danger', suspendido: 'badge-warning',
+  consulta: 'badge-accent', activo: 'badge-info', ganado: 'badge-success',
+  perdido: 'badge-danger', suspendido: 'badge-warning', cancelado: 'badge-muted',
 };
 
 const ESTADO_LABELS: Record<string, string> = {
-  activo: 'Activo', en_proceso: 'En Proceso', cerrado: 'Cerrado',
-  ganado: 'Ganado', perdido: 'Perdido', suspendido: 'Suspendido',
+  consulta: 'Consulta', activo: 'Activo', ganado: 'Ganado',
+  perdido: 'Perdido', suspendido: 'Suspendido', cancelado: 'Cancelado',
+};
+
+// Espeja el grafo de transiciones que valida el backend, para no ofrecer saltos que igual serían rechazados
+const TRANSICIONES_ESTADO: Record<string, string[]> = {
+  consulta: ['activo', 'cancelado'],
+  activo: ['ganado', 'perdido', 'suspendido', 'cancelado'],
+  suspendido: ['activo', 'cancelado'],
+  ganado: [],
+  perdido: [],
+  cancelado: [],
 };
 
 const PAGO_ESTADO_COLORS: Record<string, string> = {
@@ -132,6 +143,7 @@ export default function ExpedienteDetallePage() {
   const [abonoModal, setAbonoModal] = useState<any>(null);
   const [recibo, setRecibo] = useState<{ pago: any; abono: any } | null>(null);
   const [expandedPagoId, setExpandedPagoId] = useState<number | null>(null);
+  const { askConfirm, confirmDialog } = useConfirmDialog();
 
   const { data: exp, isLoading } = useQuery({
     queryKey: ['expediente', id],
@@ -210,10 +222,27 @@ export default function ExpedienteDetallePage() {
           <button className="btn btn-secondary btn-sm" onClick={() => setEditModalOpen(true)}>
             <Pencil size={14} /> Editar
           </button>
-          <select className="form-select" value={exp.estado} disabled={estadoM.isPending}
-            onChange={(e) => estadoM.mutate(e.target.value)} style={{ maxWidth: 160 }}>
-            {Object.entries(ESTADO_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-          </select>
+          {(TRANSICIONES_ESTADO[exp.estado] || []).length > 0 && (
+            <select className="form-select" value={exp.estado} disabled={estadoM.isPending}
+              onChange={(e) => {
+                const nuevoEstado = e.target.value;
+                if (nuevoEstado === exp.estado) return;
+                askConfirm({
+                  title: 'Cambiar estado del expediente',
+                  message: `¿Cambiar "${exp.numero}" de "${ESTADO_LABELS[exp.estado]}" a "${ESTADO_LABELS[nuevoEstado]}"?${
+                    ['ganado', 'perdido', 'cancelado'].includes(nuevoEstado) ? '\n\nEste es un estado final: ya no podrás volver a cambiarlo.' : ''
+                  }`,
+                  confirmLabel: 'Cambiar estado',
+                  danger: nuevoEstado === 'perdido' || nuevoEstado === 'cancelado',
+                  onConfirm: () => estadoM.mutate(nuevoEstado),
+                });
+              }} style={{ maxWidth: 200 }}>
+              <option value={exp.estado}>{ESTADO_LABELS[exp.estado]} (actual)</option>
+              {TRANSICIONES_ESTADO[exp.estado].map((s) => (
+                <option key={s} value={s}>→ Cambiar a {ESTADO_LABELS[s]}</option>
+              ))}
+            </select>
+          )}
         </div>
       </div>
 
@@ -513,6 +542,7 @@ export default function ExpedienteDetallePage() {
       {recibo && (
         <ReciboModal pago={recibo.pago} abono={recibo.abono} onClose={() => setRecibo(null)} />
       )}
+      {confirmDialog}
     </div>
   );
 }

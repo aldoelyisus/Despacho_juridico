@@ -11,8 +11,31 @@ import { CreateExpedienteDto } from './dto/create-expediente.dto';
 import { UpdateExpedienteDto } from './dto/update-expediente.dto';
 import { CreateDocumentoDto } from './dto/create-documento.dto';
 import { CreateEventoDto } from './dto/create-evento.dto';
+import { AuditoriaService } from '../auditoria/auditoria.service';
 
 const LIMITE_MAXIMO = 100;
+
+const ESTADO_LABELS: Record<EstadoExpediente, string> = {
+  [EstadoExpediente.CONSULTA]: 'Consulta',
+  [EstadoExpediente.ACTIVO]: 'Activo',
+  [EstadoExpediente.GANADO]: 'Ganado',
+  [EstadoExpediente.PERDIDO]: 'Perdido',
+  [EstadoExpediente.SUSPENDIDO]: 'Suspendido',
+  [EstadoExpediente.CANCELADO]: 'Cancelado',
+};
+
+/** Grafo de transiciones válidas del expediente. Los estados sin salidas (ganado, perdido, cancelado) son finales. */
+const TRANSICIONES_ESTADO: Record<EstadoExpediente, EstadoExpediente[]> = {
+  [EstadoExpediente.CONSULTA]: [EstadoExpediente.ACTIVO, EstadoExpediente.CANCELADO],
+  [EstadoExpediente.ACTIVO]: [EstadoExpediente.GANADO, EstadoExpediente.PERDIDO, EstadoExpediente.SUSPENDIDO, EstadoExpediente.CANCELADO],
+  [EstadoExpediente.SUSPENDIDO]: [EstadoExpediente.ACTIVO, EstadoExpediente.CANCELADO],
+  [EstadoExpediente.GANADO]: [],
+  [EstadoExpediente.PERDIDO]: [],
+  [EstadoExpediente.CANCELADO]: [],
+};
+
+/** Al llegar a estos estados se considera que el caso terminó, y se registra la fecha de cierre si no se había fijado */
+const ESTADOS_DE_CIERRE = [EstadoExpediente.GANADO, EstadoExpediente.PERDIDO, EstadoExpediente.CANCELADO];
 
 @Injectable()
 export class ExpedientesService {
@@ -23,6 +46,7 @@ export class ExpedientesService {
     @InjectRepository(EventoExpediente) private eventoRepo: Repository<EventoExpediente>,
     @InjectRepository(Cliente) private clienteRepo: Repository<Cliente>,
     @InjectRepository(Usuario) private usuarioRepo: Repository<Usuario>,
+    private auditoriaService: AuditoriaService,
   ) {}
 
   private isAdmin(user: any): boolean {
@@ -38,7 +62,8 @@ export class ExpedientesService {
     const qb = this.repo
       .createQueryBuilder('e')
       .leftJoinAndSelect('e.clientes', 'c')
-      .leftJoinAndSelect('e.colaboradores', 'col')
+      .leftJoin('e.colaboradores', 'col')
+      .addSelect(['col.id', 'col.nombre', 'col.apellido', 'col.avatar'])
       .where('e.despachoId = :despachoId', { despachoId });
 
     // Si NO es admin, solo ve los expedientes donde está asignado
@@ -65,7 +90,8 @@ export class ExpedientesService {
     const qb = this.repo
       .createQueryBuilder('e')
       .leftJoinAndSelect('e.clientes', 'c')
-      .leftJoinAndSelect('e.colaboradores', 'col')
+      .leftJoin('e.colaboradores', 'col')
+      .addSelect(['col.id', 'col.nombre', 'col.apellido', 'col.avatar'])
       .leftJoinAndSelect('e.documentos', 'doc')
       .leftJoinAndSelect('e.observaciones', 'obs')
       .leftJoinAndSelect('e.eventosExpediente', 'ev')
@@ -91,7 +117,9 @@ export class ExpedientesService {
     const count = await this.repo.count({ where: { despachoId } });
     const year = new Date().getFullYear();
     const numero = `EXP-${year}-${String(count + 1).padStart(4, '0')}`;
-    const exp = Object.assign(new Expediente(), { ...rest, despachoId, numero, montoTotal: 0 });
+    const exp = Object.assign(new Expediente(), {
+      ...rest, despachoId, numero, montoTotal: 0, estado: EstadoExpediente.CONSULTA,
+    });
 
     exp.clientes = (await this.resolveClientes(clienteIds, despachoId))!;
     if (colaboradorIds?.length) {
@@ -114,9 +142,34 @@ export class ExpedientesService {
     return this.repo.save(exp);
   }
 
-  async cambiarEstado(id: number, estado: EstadoExpediente, user: any) {
-    await this.findOne(id, user);
-    await this.repo.update({ id, despachoId: user.despachoId }, { estado });
+  async cambiarEstado(id: number, estado: EstadoExpediente, user: any, ip?: string) {
+    const exp = await this.findOne(id, user);
+    const estadoAnterior = exp.estado;
+
+    if (estadoAnterior === estado) {
+      throw new BadRequestException(`El expediente ya está en estado "${ESTADO_LABELS[estado]}"`);
+    }
+
+    const permitidos = TRANSICIONES_ESTADO[estadoAnterior] ?? [];
+    if (!permitidos.includes(estado)) {
+      const detalle = permitidos.length
+        ? `Desde "${ESTADO_LABELS[estadoAnterior]}" solo puedes pasar a: ${permitidos.map((p) => ESTADO_LABELS[p]).join(', ')}.`
+        : `"${ESTADO_LABELS[estadoAnterior]}" es un estado final y no admite cambios.`;
+      throw new BadRequestException(`No se puede cambiar de "${ESTADO_LABELS[estadoAnterior]}" a "${ESTADO_LABELS[estado]}". ${detalle}`);
+    }
+
+    const cambios: Partial<Expediente> = { estado };
+    if (ESTADOS_DE_CIERRE.includes(estado) && !exp.fechaCierre) {
+      cambios.fechaCierre = new Date();
+    }
+
+    await this.repo.update({ id, despachoId: user.despachoId }, cambios);
+
+    await this.registrarAuditoria(
+      user.despachoId, 'CAMBIO_ESTADO', user, ip,
+      `Expediente ${exp.numero} cambió de "${ESTADO_LABELS[estadoAnterior]}" a "${ESTADO_LABELS[estado]}"`,
+    );
+
     return this.findOne(id, user);
   }
 
@@ -178,11 +231,28 @@ export class ExpedientesService {
       .getRawMany();
 
     const ganados = byStatus.find((s: any) => s.estado === 'ganado')?.total || 0;
-    const cerrados = ['cerrado', 'ganado', 'perdido'].reduce(
+    const cerrados = ['cancelado', 'ganado', 'perdido'].reduce(
       (sum: number, st: string) => sum + Number(byStatus.find((s: any) => s.estado === st)?.total || 0), 0
     );
     const tasaExito = cerrados > 0 ? Math.round((ganados / cerrados) * 100) : 0;
     return { byStatus, tasaExito };
+  }
+
+  private async registrarAuditoria(despachoId: number, accion: string, usuario: any, ip: string | undefined, descripcion: string) {
+    if (!usuario) return;
+    try {
+      await this.auditoriaService.log({
+        despachoId,
+        usuarioId: usuario.id,
+        usuarioNombre: `${usuario.nombre} ${usuario.apellido}`,
+        accion,
+        modulo: 'EXPEDIENTES',
+        descripcion,
+        ip,
+      });
+    } catch {
+      // La auditoría nunca debe interrumpir la operación del usuario
+    }
   }
 
   private async resolveClientes(clienteIds: number[] | undefined, despachoId: number): Promise<Cliente[] | undefined> {
@@ -198,7 +268,12 @@ export class ExpedientesService {
   private async resolveColaboradores(colaboradorIds: number[] | undefined, despachoId: number): Promise<Usuario[] | undefined> {
     if (colaboradorIds === undefined) return undefined;
     if (!colaboradorIds.length) return [];
-    const usuarios = await this.usuarioRepo.findBy({ id: In(colaboradorIds), despachoId });
+    // select acotado: nunca traer password/2FA — este resultado se guarda en exp.colaboradores
+    // y se devuelve tal cual en la respuesta de create()/update().
+    const usuarios = await this.usuarioRepo.find({
+      where: { id: In(colaboradorIds), despachoId },
+      select: { id: true, nombre: true, apellido: true, avatar: true },
+    });
     if (usuarios.length !== new Set(colaboradorIds).size) {
       throw new BadRequestException('Uno o más colaboradores seleccionados no existen en tu despacho');
     }

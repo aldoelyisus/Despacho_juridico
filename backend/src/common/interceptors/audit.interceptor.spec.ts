@@ -63,4 +63,22 @@ describe('AuditInterceptor', () => {
       expect(modulo('/root/despachos/3')).toBe('DESPACHOS');
     });
   });
+
+  describe('isManuallyAudited', () => {
+    const manual = (method: string, url: string) => (interceptor as any).isManuallyAudited(method, url);
+
+    it('skips the expediente estado-change route, which logs its own before/after entry', () => {
+      expect(manual('PATCH', '/expedientes/7/estado')).toBe(true);
+      expect(manual('PATCH', '/expedientes/7/estado?foo=bar')).toBe(true);
+    });
+
+    it('does not skip other expediente routes', () => {
+      expect(manual('PATCH', '/expedientes/7')).toBe(false);
+      expect(manual('POST', '/expedientes/7/eventos')).toBe(false);
+    });
+
+    it('does not skip the estado route for a different HTTP method', () => {
+      expect(manual('POST', '/expedientes/7/estado')).toBe(false);
+    });
+  });
 });

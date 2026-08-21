@@ -1,8 +1,9 @@
-import { IsNotEmpty, IsString, IsOptional, IsInt, IsEnum, IsDateString, IsArray, Length } from 'class-validator';
+import { IsNotEmpty, IsString, IsOptional, IsInt, IsDateString, IsArray, Length } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { EstadoExpediente } from '../entities/expediente.entity';
 
+// No incluye "estado": siempre inicia en CONSULTA y solo cambia vía PATCH /expedientes/:id/estado,
+// que valida las transiciones permitidas.
 export class CreateExpedienteDto {
   @IsNotEmpty({ message: 'El título del expediente es obligatorio' })
   @IsString()
@@ -26,11 +27,6 @@ export class CreateExpedienteDto {
   @IsInt({ message: 'La subárea seleccionada no es válida' })
   @ApiPropertyOptional({ example: 3 })
   subareaId?: number;
-
-  @IsOptional()
-  @IsEnum(EstadoExpediente, { message: 'El estado seleccionado no es válido' })
-  @ApiPropertyOptional({ enum: EstadoExpediente, example: EstadoExpediente.ACTIVO })
-  estado?: EstadoExpediente;
 
   @IsOptional()
   @IsDateString({}, { message: 'La fecha de inicio no es válida' })

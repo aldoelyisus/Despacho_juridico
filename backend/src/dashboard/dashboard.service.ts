@@ -135,7 +135,7 @@ export class DashboardService {
       .addSelect('COUNT(e.id)', 'totalExpedientes')
       .addSelect("SUM(CASE WHEN e.estado = 'ganado' THEN 1 ELSE 0 END)", 'ganados')
       .addSelect("SUM(CASE WHEN e.estado = 'perdido' THEN 1 ELSE 0 END)", 'perdidos')
-      .addSelect("SUM(CASE WHEN e.estado = 'cerrado' THEN 1 ELSE 0 END)", 'cerrados')
+      .addSelect("SUM(CASE WHEN e.estado = 'cancelado' THEN 1 ELSE 0 END)", 'cancelados')
       .where('e.despachoId = :despachoId', { despachoId })
       .groupBy('u.id')
       .getRawMany();

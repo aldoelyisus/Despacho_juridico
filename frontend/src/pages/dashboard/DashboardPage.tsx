@@ -15,12 +15,12 @@ import './DashboardPage.css';
 const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#3b82f6', '#8b5cf6'];
 
 const ESTADO_LABELS: Record<string, string> = {
+  consulta: 'Consulta',
   activo: 'Activo',
-  en_proceso: 'En proceso',
-  cerrado: 'Cerrado',
   ganado: 'Ganado',
   perdido: 'Perdido',
   suspendido: 'Suspendido',
+  cancelado: 'Cancelado',
 };
 
 function StatCard({ title, value, icon: Icon, color, change, suffix = '' }: any) {

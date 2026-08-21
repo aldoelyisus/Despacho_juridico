@@ -26,6 +26,12 @@ export class AuditInterceptor implements NestInterceptor {
       return next.handle();
     }
 
+    // Rutas que ya registran su propia auditoría más detallada (ej. transición de estado con
+    // el "antes" y "después") — omitir aquí para no duplicar la entrada con una genérica.
+    if (this.isManuallyAudited(method, request.url)) {
+      return next.handle();
+    }
+
     const user = request.user;
     const url = request.url;
     const now = Date.now();
@@ -48,6 +54,11 @@ export class AuditInterceptor implements NestInterceptor {
         } catch {}
       }),
     );
+  }
+
+  private isManuallyAudited(method: string, url: string): boolean {
+    const path = url.split('?')[0];
+    return method === 'PATCH' && /^\/expedientes\/\d+\/estado$/.test(path);
   }
 
   /** Arma una descripción legible a partir del recurso afectado; si no se reconoce ningún campo, cae al formato técnico */

@@ -49,13 +49,7 @@ export class AuthService {
       relations: { rol: true, despacho: true },
     });
 
-    if (usuario?.bloqueadoHasta && usuario.bloqueadoHasta.getTime() > Date.now()) {
-      await this.logIntento('LOGIN_BLOQUEADO', usuario, dto.email, ip);
-      const minutosRestantes = Math.ceil((usuario.bloqueadoHasta.getTime() - Date.now()) / 60000);
-      throw new ForbiddenException(
-        `Cuenta bloqueada temporalmente por múltiples intentos fallidos. Intenta de nuevo en ${minutosRestantes} minuto(s).`,
-      );
-    }
+    if (usuario) await this.assertCuentaNoBloqueada(usuario, ip);
 
     // Siempre se ejecuta bcrypt.compare (contra el hash real o uno dummy) para que el
     // tiempo de respuesta sea el mismo exista o no el usuario / sea cual sea la contraseña.
@@ -125,7 +119,10 @@ export class AuthService {
     };
   }
 
-  private async registrarIntentoFallido(usuario: Usuario, ip?: string) {
+  /** accionFallo permite reutilizar el mismo contador/bloqueo de cuenta para intentos fallidos
+   *  de contraseña (LOGIN_FALLIDO) o de código 2FA (2FA_FALLIDO) — cualquiera de los dos agota
+   *  el mismo límite de intentos, porque ambos son intentos de autenticación contra la cuenta. */
+  private async registrarIntentoFallido(usuario: Usuario, ip?: string, accionFallo: string = 'LOGIN_FALLIDO') {
     const intentos = (usuario.intentosFallidos ?? 0) + 1;
     if (intentos >= this.maxIntentos) {
       const bloqueadoHasta = new Date(Date.now() + this.bloqueoMinutos * 60000);
@@ -133,7 +130,35 @@ export class AuthService {
       await this.logIntento('CUENTA_BLOQUEADA', usuario, usuario.email, ip);
     } else {
       await this.usuarioRepo.update(usuario.id, { intentosFallidos: intentos });
-      await this.logIntento('LOGIN_FALLIDO', usuario, usuario.email, ip);
+      await this.logIntento(accionFallo, usuario, usuario.email, ip);
+    }
+  }
+
+  /** Usado tanto al iniciar sesión con contraseña como al verificar el código 2FA: ambos son
+   *  intentos de autenticación contra la misma cuenta y comparten el mismo bloqueo temporal. */
+  private async assertCuentaNoBloqueada(usuario: Usuario, ip?: string) {
+    if (usuario.bloqueadoHasta && usuario.bloqueadoHasta.getTime() > Date.now()) {
+      await this.logIntento('LOGIN_BLOQUEADO', usuario, usuario.email, ip);
+      const minutosRestantes = Math.ceil((usuario.bloqueadoHasta.getTime() - Date.now()) / 60000);
+      throw new ForbiddenException(
+        `Cuenta bloqueada temporalmente por múltiples intentos fallidos. Intenta de nuevo en ${minutosRestantes} minuto(s).`,
+      );
+    }
+  }
+
+  /** Mismo criterio que JwtStrategy: una sesión deja de ser válida si el usuario fue desactivado
+   *  o su despacho quedó bloqueado/desactivado — se aplica también al refrescar tokens, para que
+   *  no se puedan seguir renovando tokens indefinidamente después de perder el acceso. */
+  private assertSesionActiva(usuario: Usuario & { rol?: Rol; despacho?: Despacho }) {
+    const isRoot = usuario.rol?.nombre?.toLowerCase() === 'root';
+    if (isRoot || !usuario.despacho) return;
+    if (!usuario.despacho.activo) {
+      throw new ForbiddenException('El despacho está desactivado');
+    }
+    if (usuario.despacho.bloqueado) {
+      throw new ForbiddenException(
+        'El acceso de tu despacho está suspendido por falta de pago. Contacta al administrador del sistema.',
+      );
     }
   }
 
@@ -218,6 +243,12 @@ export class AuthService {
       relations: { rol: true, despacho: true },
     });
     if (!usuario) throw new UnauthorizedException('Usuario no encontrado');
+
+    // El mismo bloqueo por intentos fallidos que protege la contraseña también protege el
+    // código 2FA: sin esto, alguien con la contraseña correcta podría intentar códigos TOTP
+    // sin límite mientras el token temporal (5 min) siga vigente.
+    await this.assertCuentaNoBloqueada(usuario, ip);
+
     if (!usuario.twoFactorEnabled || !usuario.twoFactorSecret) {
       throw new BadRequestException('2FA no está activo en esta cuenta');
     }
@@ -234,11 +265,12 @@ export class AuthService {
     if (!isValid) {
       const backupUsed = await this.tryBackupCode(usuario, code);
       if (!backupUsed) {
-        await this.logIntento('2FA_FALLIDO', usuario, usuario.email, ip);
+        await this.registrarIntentoFallido(usuario, ip, '2FA_FALLIDO');
         throw new UnauthorizedException('Código incorrecto');
       }
     }
 
+    await this.usuarioRepo.update(usuario.id, { intentosFallidos: 0, bloqueadoHasta: null as any });
     await this.logIntento('2FA_EXITOSO', usuario, usuario.email, ip);
 
     const isRoot = usuario.rol?.nombre?.toLowerCase() === 'root';
@@ -396,19 +428,27 @@ export class AuthService {
   }
 
   async refreshToken(refreshToken: string) {
+    let payload: any;
     try {
-      const payload = this.jwtService.verify(refreshToken, {
+      payload = this.jwtService.verify(refreshToken, {
         secret: this.config.get('JWT_REFRESH_SECRET'),
       });
-      const usuario = await this.usuarioRepo.findOne({
-        where: { id: payload.sub },
-        relations: { rol: true },
-      });
-      if (!usuario) throw new UnauthorizedException();
-      return this.generateTokens(usuario as any);
     } catch {
       throw new UnauthorizedException('Refresh token inválido');
     }
+
+    // activo: true — un usuario desactivado no debe poder seguir renovando su sesión
+    // indefinidamente solo porque su refresh token (hasta 7 días) todavía no expiró.
+    const usuario = await this.usuarioRepo.findOne({
+      where: { id: payload.sub, activo: true },
+      relations: { rol: true, despacho: true },
+    });
+    if (!usuario) {
+      throw new UnauthorizedException('Sesión inválida: el usuario ya no existe o fue desactivado');
+    }
+    this.assertSesionActiva(usuario);
+
+    return this.generateTokens(usuario);
   }
 
   // ── SEMILLA ───────────────────────────────────────────────────────────────

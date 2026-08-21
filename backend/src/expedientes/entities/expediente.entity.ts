@@ -13,12 +13,12 @@ import { Observacion } from './observacion.entity';
 import { EventoExpediente } from './evento-expediente.entity';
 
 export enum EstadoExpediente {
+  CONSULTA = 'consulta',
   ACTIVO = 'activo',
-  EN_PROCESO = 'en_proceso',
-  CERRADO = 'cerrado',
   GANADO = 'ganado',
   PERDIDO = 'perdido',
   SUSPENDIDO = 'suspendido',
+  CANCELADO = 'cancelado',
 }
 
 @Entity('expedientes')
@@ -59,7 +59,7 @@ export class Expediente extends BaseEntity {
   @Column({
     type: 'enum',
     enum: EstadoExpediente,
-    default: EstadoExpediente.ACTIVO,
+    default: EstadoExpediente.CONSULTA,
   })
   @ApiProperty({ enum: EstadoExpediente })
   estado: EstadoExpediente;

@@ -22,7 +22,8 @@ export class AgendaService {
 
     const qb = this.repo
       .createQueryBuilder('e')
-      .leftJoinAndSelect('e.participantes', 'p')
+      .leftJoin('e.participantes', 'p')
+      .addSelect(['p.id', 'p.nombre', 'p.apellido', 'p.avatar'])
       .where('e.despachoId = :despachoId', { despachoId })
       .andWhere(
         // creador O participante (admin ve todo)
@@ -45,7 +46,8 @@ export class AgendaService {
 
     const qb = this.repo
       .createQueryBuilder('e')
-      .leftJoinAndSelect('e.participantes', 'p')
+      .leftJoin('e.participantes', 'p')
+      .addSelect(['p.id', 'p.nombre', 'p.apellido', 'p.avatar'])
       .where('e.id = :id AND e.despachoId = :despachoId', { id, despachoId });
 
     if (!this.isAdmin(user)) {
@@ -70,7 +72,10 @@ export class AgendaService {
 
     // El creador siempre es participante + los que agregue
     const todosIds = Array.from(new Set([creadorId, ...participanteIds.map(Number)]));
-    evento.participantes = await this.usuarioRepo.findBy({ id: In(todosIds) });
+    evento.participantes = await this.usuarioRepo.find({
+      where: { id: In(todosIds) },
+      select: { id: true, nombre: true, apellido: true, avatar: true },
+    });
 
     return this.repo.save(evento);
   }
@@ -89,7 +94,10 @@ export class AgendaService {
     if (participanteIds !== undefined) {
       // Siempre mantener al creador
       const todosIds = Array.from(new Set([evento.creadorId, ...participanteIds.map(Number)]));
-      evento.participantes = await this.usuarioRepo.findBy({ id: In(todosIds) });
+      evento.participantes = await this.usuarioRepo.find({
+        where: { id: In(todosIds) },
+        select: { id: true, nombre: true, apellido: true, avatar: true },
+      });
     }
 
     return this.repo.save(evento);
@@ -115,7 +123,8 @@ export class AgendaService {
 
     const qb = this.repo
       .createQueryBuilder('e')
-      .leftJoinAndSelect('e.participantes', 'p')
+      .leftJoin('e.participantes', 'p')
+      .addSelect(['p.id', 'p.nombre', 'p.apellido', 'p.avatar'])
       .where('e.despachoId = :despachoId', { despachoId })
       .andWhere('e.fechaInicio BETWEEN :desde AND :hasta', { desde, hasta });
 

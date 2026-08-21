@@ -1,6 +1,6 @@
 import {
   Controller, Get, Post, Patch, Body, Param,
-  Query, ParseIntPipe, UseInterceptors, UploadedFile,
+  Query, ParseIntPipe, UseInterceptors, UploadedFile, Ip,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
@@ -74,8 +74,9 @@ export class ExpedientesController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: CambiarEstadoExpedienteDto,
     @CurrentUser() user: any,
+    @Ip() ip: string,
   ) {
-    return this.service.cambiarEstado(id, dto.estado, user);
+    return this.service.cambiarEstado(id, dto.estado, user, ip);
   }
 
   @Post(':id/documentos')

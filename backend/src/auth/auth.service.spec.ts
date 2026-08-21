@@ -161,6 +161,92 @@ describe('AuthService', () => {
     });
   });
 
+  describe('refreshToken', () => {
+    it('rejects an expired or malformed refresh token', async () => {
+      jwtService.verify.mockImplementation(() => { throw new Error('jwt expired'); });
+      await expect(service.refreshToken('bad-token')).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('rejects when the user was deactivated after the refresh token was issued', async () => {
+      jwtService.verify.mockReturnValue({ sub: 1 });
+      usuarioRepo.findOne.mockResolvedValue(null); // activo:true en el where — no lo encuentra
+      await expect(service.refreshToken('valid-token')).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('rejects when the despacho was blocked for non-payment after the refresh token was issued', async () => {
+      jwtService.verify.mockReturnValue({ sub: 1 });
+      usuarioRepo.findOne.mockResolvedValue(buildUsuario({ despacho: { id: 10, activo: true, bloqueado: true } as Despacho }));
+      await expect(service.refreshToken('valid-token')).rejects.toThrow(ForbiddenException);
+    });
+
+    it('rejects when the despacho was deactivated after the refresh token was issued', async () => {
+      jwtService.verify.mockReturnValue({ sub: 1 });
+      usuarioRepo.findOne.mockResolvedValue(buildUsuario({ despacho: { id: 10, activo: false, bloqueado: false } as Despacho }));
+      await expect(service.refreshToken('valid-token')).rejects.toThrow(ForbiddenException);
+    });
+
+    it('does not check despacho status for a root user', async () => {
+      jwtService.verify.mockReturnValue({ sub: 1 });
+      usuarioRepo.findOne.mockResolvedValue(buildUsuario({ rol: { id: 1, nombre: 'root' } as Rol, despacho: null as any }));
+      await expect(service.refreshToken('valid-token')).resolves.toHaveProperty('accessToken');
+    });
+
+    it('issues fresh tokens for a still-active user in a healthy despacho', async () => {
+      jwtService.verify.mockReturnValue({ sub: 1 });
+      usuarioRepo.findOne.mockResolvedValue(buildUsuario());
+      const result = await service.refreshToken('valid-token');
+      expect(result).toHaveProperty('accessToken');
+      expect(result).toHaveProperty('refreshToken');
+    });
+  });
+
+  describe('verify2FA — bloqueo por intentos', () => {
+    const speakeasy = require('speakeasy');
+
+    it('rejects while the account is locked from prior failed attempts, without checking the code', async () => {
+      jwtService.verify.mockReturnValue({ sub: 1, type: '2fa_pending' });
+      usuarioRepo.findOne.mockResolvedValue(buildUsuario({ twoFactorEnabled: true, twoFactorSecret: 'SECRET', bloqueadoHasta: new Date(Date.now() + 60_000) }));
+      const spy = jest.spyOn(speakeasy.totp, 'verify');
+
+      await expect(service.verify2FA('temp-token', '000000')).rejects.toThrow(ForbiddenException);
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('locks the account after reaching LOGIN_MAX_INTENTOS wrong codes', async () => {
+      jwtService.verify.mockReturnValue({ sub: 1, type: '2fa_pending' });
+      usuarioRepo.findOne.mockResolvedValue(buildUsuario({ twoFactorEnabled: true, twoFactorSecret: 'SECRET', intentosFallidos: 2 }));
+      jest.spyOn(speakeasy.totp, 'verify').mockReturnValue(false);
+
+      await expect(service.verify2FA('temp-token', '000000')).rejects.toThrow(UnauthorizedException);
+
+      const updateArg = usuarioRepo.update.mock.calls.find((c: any) => c[1].bloqueadoHasta instanceof Date)?.[1];
+      expect(updateArg?.bloqueadoHasta).toBeInstanceOf(Date);
+      expect(auditoriaService.log).toHaveBeenCalledWith(expect.objectContaining({ accion: 'CUENTA_BLOQUEADA' }));
+    });
+
+    it('does not lock the account when a wrong code is followed by a valid backup code', async () => {
+      jwtService.verify.mockReturnValue({ sub: 1, type: '2fa_pending' });
+      usuarioRepo.findOne.mockResolvedValue(buildUsuario({
+        twoFactorEnabled: true, twoFactorSecret: 'SECRET', twoFactorBackupCodes: ['AAAA-BBBB'],
+      }));
+      jest.spyOn(speakeasy.totp, 'verify').mockReturnValue(false);
+
+      const result = await service.verify2FA('temp-token', 'aaaa-bbbb');
+      expect(result).toHaveProperty('accessToken');
+      expect(auditoriaService.log).not.toHaveBeenCalledWith(expect.objectContaining({ accion: '2FA_FALLIDO' }));
+    });
+
+    it('resets the failed-attempt counter on a successful code', async () => {
+      jwtService.verify.mockReturnValue({ sub: 1, type: '2fa_pending' });
+      usuarioRepo.findOne.mockResolvedValue(buildUsuario({ twoFactorEnabled: true, twoFactorSecret: 'SECRET', intentosFallidos: 2 }));
+      jest.spyOn(speakeasy.totp, 'verify').mockReturnValue(true);
+
+      await service.verify2FA('temp-token', '123456');
+
+      expect(usuarioRepo.update).toHaveBeenCalledWith(1, { intentosFallidos: 0, bloqueadoHasta: null });
+    });
+  });
+
   describe('generateBackupCodes (via enable2FA)', () => {
     it('produces 8 unique codes in XXXX-XXXX format using an unambiguous alphabet', async () => {
       const usuario = buildUsuario({ twoFactorSecret: 'JBSWY3DPEHPK3PXP', twoFactorEnabled: false });

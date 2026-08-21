@@ -12,6 +12,7 @@ import { Cliente } from '../clientes/entities/cliente.entity';
 import { Usuario } from '../usuarios/entities/usuario.entity';
 import { CreateExpedienteDto } from './dto/create-expediente.dto';
 import { CreateEventoDto } from './dto/create-evento.dto';
+import { AuditoriaService } from '../auditoria/auditoria.service';
 
 function createQueryBuilderMock(overrides: Record<string, any> = {}) {
   return {
@@ -54,6 +55,7 @@ describe('ExpedientesService', () => {
   let eventoRepo: ReturnType<typeof repoMockFactory>;
   let clienteRepo: ReturnType<typeof repoMockFactory>;
   let usuarioRepo: ReturnType<typeof repoMockFactory>;
+  let auditoriaService: { log: jest.Mock };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -65,6 +67,7 @@ describe('ExpedientesService', () => {
         { provide: getRepositoryToken(EventoExpediente), useFactory: repoMockFactory },
         { provide: getRepositoryToken(Cliente), useFactory: repoMockFactory },
         { provide: getRepositoryToken(Usuario), useFactory: repoMockFactory },
+        { provide: AuditoriaService, useValue: { log: jest.fn().mockResolvedValue(undefined) } },
       ],
     }).compile();
 
@@ -75,6 +78,7 @@ describe('ExpedientesService', () => {
     eventoRepo = module.get(getRepositoryToken(EventoExpediente));
     clienteRepo = module.get(getRepositoryToken(Cliente));
     usuarioRepo = module.get(getRepositoryToken(Usuario));
+    auditoriaService = module.get(AuditoriaService) as any;
   });
 
   describe('findAll', () => {
@@ -99,6 +103,13 @@ describe('ExpedientesService', () => {
       await service.findAll(adminUser, {});
       expect(qb.andWhere).not.toHaveBeenCalledWith('col.id = :usuarioId', expect.anything());
     });
+
+    it('never selects colaboradores password/2FA columns (regression guard for a real leak)', async () => {
+      const qb = createQueryBuilderMock({ getManyAndCount: jest.fn().mockResolvedValue([[], 0]) });
+      repo.createQueryBuilder.mockReturnValue(qb);
+      await service.findAll(adminUser, {});
+      expect(qb.addSelect).toHaveBeenCalledWith(['col.id', 'col.nombre', 'col.apellido', 'col.avatar']);
+    });
   });
 
   describe('findOne', () => {
@@ -106,6 +117,13 @@ describe('ExpedientesService', () => {
       const qb = createQueryBuilderMock({ getOne: jest.fn().mockResolvedValue(null) });
       repo.createQueryBuilder.mockReturnValue(qb);
       await expect(service.findOne(1, colaboradorUser)).rejects.toThrow(NotFoundException);
+    });
+
+    it('never selects colaboradores password/2FA columns (regression guard for a real leak)', async () => {
+      const qb = createQueryBuilderMock({ getOne: jest.fn().mockResolvedValue({ id: 1 }) });
+      repo.createQueryBuilder.mockReturnValue(qb);
+      await service.findOne(1, adminUser);
+      expect(qb.addSelect).toHaveBeenCalledWith(['col.id', 'col.nombre', 'col.apellido', 'col.avatar']);
     });
 
     it('returns the expediente when found', async () => {
@@ -139,11 +157,30 @@ describe('ExpedientesService', () => {
       expect(result.montoTotal).toBe(0);
     });
 
+    it('never fetches colaboradores with password/2FA columns (regression guard for a real leak)', async () => {
+      repo.count.mockResolvedValue(0);
+      clienteRepo.findBy.mockResolvedValue([{ id: 4, despachoId: 1 }]);
+      usuarioRepo.find.mockResolvedValue([{ id: 2, despachoId: 1, nombre: 'Luis', apellido: 'Diaz' }]);
+      await service.create({ titulo: 'Caso', clienteIds: [4], colaboradorIds: [2] } as any, 1);
+      const [options] = usuarioRepo.find.mock.calls[0];
+      expect(options.select).toEqual({ id: true, nombre: true, apellido: true, avatar: true });
+      expect(options.select.password).toBeUndefined();
+      expect(options.select.twoFactorSecret).toBeUndefined();
+      expect(options.select.twoFactorBackupCodes).toBeUndefined();
+    });
+
     it('ignores a client-supplied montoTotal and always starts at 0', async () => {
       repo.count.mockResolvedValue(0);
       clienteRepo.findBy.mockResolvedValue([{ id: 4, despachoId: 1 }]);
       const result = await service.create({ titulo: 'Caso', clienteIds: [4], montoTotal: 99999 } as any, 1);
       expect(result.montoTotal).toBe(0);
+    });
+
+    it('always starts in estado CONSULTA regardless of a client-supplied estado', async () => {
+      repo.count.mockResolvedValue(0);
+      clienteRepo.findBy.mockResolvedValue([{ id: 4, despachoId: 1 }]);
+      const result = await service.create({ titulo: 'Caso', clienteIds: [4], estado: EstadoExpediente.GANADO } as any, 1);
+      expect(result.estado).toBe(EstadoExpediente.CONSULTA);
     });
   });
 
@@ -157,7 +194,7 @@ describe('ExpedientesService', () => {
     it('rejects colaboradores that do not belong to the despacho', async () => {
       const qb = createQueryBuilderMock({ getOne: jest.fn().mockResolvedValue({ id: 1, despachoId: 1, clientes: [], colaboradores: [] }) });
       repo.createQueryBuilder.mockReturnValue(qb);
-      usuarioRepo.findBy.mockResolvedValue([]);
+      usuarioRepo.find.mockResolvedValue([]);
       await expect(
         service.update(1, { colaboradorIds: [55] } as any, adminUser),
       ).rejects.toThrow(BadRequestException);
@@ -186,16 +223,84 @@ describe('ExpedientesService', () => {
     it('throws NotFoundException when the expediente is not accessible', async () => {
       const qb = createQueryBuilderMock({ getOne: jest.fn().mockResolvedValue(null) });
       repo.createQueryBuilder.mockReturnValue(qb);
-      await expect(service.cambiarEstado(1, EstadoExpediente.CERRADO, colaboradorUser)).rejects.toThrow(NotFoundException);
+      await expect(service.cambiarEstado(1, EstadoExpediente.ACTIVO, colaboradorUser)).rejects.toThrow(NotFoundException);
       expect(repo.update).not.toHaveBeenCalled();
     });
 
-    it('updates the estado and returns the refreshed expediente', async () => {
-      const qb = createQueryBuilderMock({ getOne: jest.fn().mockResolvedValue({ id: 1, despachoId: 1, estado: EstadoExpediente.CERRADO }) });
+    it('rejects setting the same estado the expediente already has', async () => {
+      const qb = createQueryBuilderMock({ getOne: jest.fn().mockResolvedValue({ id: 1, despachoId: 1, estado: EstadoExpediente.ACTIVO }) });
       repo.createQueryBuilder.mockReturnValue(qb);
-      const result = await service.cambiarEstado(1, EstadoExpediente.CERRADO, adminUser);
-      expect(repo.update).toHaveBeenCalledWith({ id: 1, despachoId: 1 }, { estado: EstadoExpediente.CERRADO });
-      expect(result.estado).toBe(EstadoExpediente.CERRADO);
+      await expect(service.cambiarEstado(1, EstadoExpediente.ACTIVO, adminUser)).rejects.toThrow(BadRequestException);
+      expect(repo.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects a transition that skips the workflow (consulta directo a ganado)', async () => {
+      const qb = createQueryBuilderMock({ getOne: jest.fn().mockResolvedValue({ id: 1, despachoId: 1, estado: EstadoExpediente.CONSULTA }) });
+      repo.createQueryBuilder.mockReturnValue(qb);
+      await expect(service.cambiarEstado(1, EstadoExpediente.GANADO, adminUser)).rejects.toThrow(BadRequestException);
+      expect(repo.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects any transition out of a final estado', async () => {
+      const qb = createQueryBuilderMock({ getOne: jest.fn().mockResolvedValue({ id: 1, despachoId: 1, estado: EstadoExpediente.GANADO }) });
+      repo.createQueryBuilder.mockReturnValue(qb);
+      await expect(service.cambiarEstado(1, EstadoExpediente.ACTIVO, adminUser)).rejects.toThrow(BadRequestException);
+    });
+
+    it('allows consulta → activo and does not touch fechaCierre', async () => {
+      const qb = createQueryBuilderMock({ getOne: jest.fn().mockResolvedValue({ id: 1, despachoId: 1, estado: EstadoExpediente.CONSULTA, fechaCierre: null }) });
+      repo.createQueryBuilder.mockReturnValue(qb);
+      await service.cambiarEstado(1, EstadoExpediente.ACTIVO, adminUser);
+      expect(repo.update).toHaveBeenCalledWith({ id: 1, despachoId: 1 }, { estado: EstadoExpediente.ACTIVO });
+    });
+
+    it('allows suspendido → activo (reactivación)', async () => {
+      const qb = createQueryBuilderMock({ getOne: jest.fn().mockResolvedValue({ id: 1, despachoId: 1, estado: EstadoExpediente.SUSPENDIDO, fechaCierre: null }) });
+      repo.createQueryBuilder.mockReturnValue(qb);
+      await service.cambiarEstado(1, EstadoExpediente.ACTIVO, adminUser);
+      expect(repo.update).toHaveBeenCalledWith({ id: 1, despachoId: 1 }, { estado: EstadoExpediente.ACTIVO });
+    });
+
+    it('sets fechaCierre automatically when reaching ganado, if it was not already set', async () => {
+      const qb = createQueryBuilderMock({ getOne: jest.fn().mockResolvedValue({ id: 1, despachoId: 1, estado: EstadoExpediente.ACTIVO, fechaCierre: null }) });
+      repo.createQueryBuilder.mockReturnValue(qb);
+      await service.cambiarEstado(1, EstadoExpediente.GANADO, adminUser);
+      const [, cambios] = repo.update.mock.calls[0];
+      expect(cambios.estado).toBe(EstadoExpediente.GANADO);
+      expect(cambios.fechaCierre).toBeInstanceOf(Date);
+    });
+
+    it('does not overwrite an existing fechaCierre when closing', async () => {
+      const fechaExistente = new Date('2026-01-01');
+      const qb = createQueryBuilderMock({ getOne: jest.fn().mockResolvedValue({ id: 1, despachoId: 1, estado: EstadoExpediente.ACTIVO, fechaCierre: fechaExistente }) });
+      repo.createQueryBuilder.mockReturnValue(qb);
+      await service.cambiarEstado(1, EstadoExpediente.PERDIDO, adminUser);
+      expect(repo.update).toHaveBeenCalledWith({ id: 1, despachoId: 1 }, { estado: EstadoExpediente.PERDIDO });
+    });
+
+    it('logs who changed the estado, and the before/after transition', async () => {
+      const qb = createQueryBuilderMock({ getOne: jest.fn().mockResolvedValue({ id: 1, despachoId: 1, numero: 'EXP-2026-0001', estado: EstadoExpediente.CONSULTA, fechaCierre: null }) });
+      repo.createQueryBuilder.mockReturnValue(qb);
+      await service.cambiarEstado(1, EstadoExpediente.ACTIVO, adminUser, '127.0.0.1');
+      expect(auditoriaService.log).toHaveBeenCalledWith(expect.objectContaining({
+        despachoId: 1, usuarioId: adminUser.id, usuarioNombre: 'Ana Ruiz',
+        accion: 'CAMBIO_ESTADO', modulo: 'EXPEDIENTES', ip: '127.0.0.1',
+        descripcion: 'Expediente EXP-2026-0001 cambió de "Consulta" a "Activo"',
+      }));
+    });
+
+    it('does not log when the transition is rejected', async () => {
+      const qb = createQueryBuilderMock({ getOne: jest.fn().mockResolvedValue({ id: 1, despachoId: 1, numero: 'EXP-2026-0001', estado: EstadoExpediente.CONSULTA, fechaCierre: null }) });
+      repo.createQueryBuilder.mockReturnValue(qb);
+      await expect(service.cambiarEstado(1, EstadoExpediente.GANADO, adminUser)).rejects.toThrow(BadRequestException);
+      expect(auditoriaService.log).not.toHaveBeenCalled();
+    });
+
+    it('never lets a failed audit log break the estado change', async () => {
+      const qb = createQueryBuilderMock({ getOne: jest.fn().mockResolvedValue({ id: 1, despachoId: 1, numero: 'EXP-2026-0001', estado: EstadoExpediente.CONSULTA, fechaCierre: null }) });
+      repo.createQueryBuilder.mockReturnValue(qb);
+      auditoriaService.log.mockRejectedValueOnce(new Error('db down'));
+      await expect(service.cambiarEstado(1, EstadoExpediente.ACTIVO, adminUser)).resolves.toBeDefined();
     });
   });
 
@@ -279,7 +384,7 @@ describe('ExpedientesService', () => {
   });
 
   describe('getStats', () => {
-    it('computes tasaExito from cerrado/ganado/perdido counts', async () => {
+    it('computes tasaExito from cancelado/ganado/perdido counts', async () => {
       const qb = createQueryBuilderMock({
         getRawMany: jest.fn().mockResolvedValue([
           { estado: 'ganado', total: '3' },
@@ -289,7 +394,7 @@ describe('ExpedientesService', () => {
       });
       repo.createQueryBuilder.mockReturnValue(qb);
       const result = await service.getStats(adminUser);
-      expect(result.tasaExito).toBe(75); // 3 ganados / 4 cerrados
+      expect(result.tasaExito).toBe(75); // 3 ganados / 4 resueltos
     });
   });
 });
@@ -301,12 +406,6 @@ describe('CreateExpedienteDto validation', () => {
     expect(errors.some((e) => e.property === 'titulo')).toBe(true);
   });
 
-  it('rejects an invalid estado', async () => {
-    const dto = plainToInstance(CreateExpedienteDto, { titulo: 'Caso', estado: 'inventado' });
-    const errors = await validate(dto);
-    expect(errors.some((e) => e.property === 'estado')).toBe(true);
-  });
-
   it('rejects a non-numeric clienteIds entry', async () => {
     const dto = plainToInstance(CreateExpedienteDto, { titulo: 'Caso', clienteIds: ['a'] });
     const errors = await validate(dto);
@@ -314,7 +413,7 @@ describe('CreateExpedienteDto validation', () => {
   });
 
   it('accepts valid input', async () => {
-    const dto = plainToInstance(CreateExpedienteDto, { titulo: 'Caso', clienteIds: [1, 2], estado: EstadoExpediente.ACTIVO });
+    const dto = plainToInstance(CreateExpedienteDto, { titulo: 'Caso', clienteIds: [1, 2] });
     const errors = await validate(dto);
     expect(errors).toHaveLength(0);
   });
