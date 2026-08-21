@@ -7,11 +7,14 @@ import { Observacion } from './entities/observacion.entity';
 import { EventoExpediente } from './entities/evento-expediente.entity';
 import { Cliente } from '../clientes/entities/cliente.entity';
 import { Usuario } from '../usuarios/entities/usuario.entity';
+import { Despacho } from '../despachos/entities/despacho.entity';
 import { CreateExpedienteDto } from './dto/create-expediente.dto';
 import { UpdateExpedienteDto } from './dto/update-expediente.dto';
 import { CreateDocumentoDto } from './dto/create-documento.dto';
 import { CreateEventoDto } from './dto/create-evento.dto';
 import { AuditoriaService } from '../auditoria/auditoria.service';
+import { S3Service } from '../common/services/s3.service';
+import { slugify } from '../common/utils/slug';
 
 const LIMITE_MAXIMO = 100;
 
@@ -46,7 +49,9 @@ export class ExpedientesService {
     @InjectRepository(EventoExpediente) private eventoRepo: Repository<EventoExpediente>,
     @InjectRepository(Cliente) private clienteRepo: Repository<Cliente>,
     @InjectRepository(Usuario) private usuarioRepo: Repository<Usuario>,
+    @InjectRepository(Despacho) private despachoRepo: Repository<Despacho>,
     private auditoriaService: AuditoriaService,
+    private s3Service: S3Service,
   ) {}
 
   private isAdmin(user: any): boolean {
@@ -173,21 +178,55 @@ export class ExpedientesService {
     return this.findOne(id, user);
   }
 
+  /** Sube el archivo a S3 bajo despachos/{despacho}/{cliente}/{numero de expediente}/ y guarda la referencia */
   async addDocumento(expedienteId: number, file: Express.Multer.File, dto: CreateDocumentoDto, user: any) {
     if (!file) throw new BadRequestException('Debes seleccionar un archivo para subir');
-    await this.findOne(expedienteId, user);
+    const exp = await this.findOne(expedienteId, user);
+
+    const key = await this.buildS3Key(exp, file.originalname);
+    await this.s3Service.uploadFile(key, file.buffer, file.mimetype);
 
     const doc = this.docRepo.create({
       expedienteId,
       despachoId: user.despachoId,
       usuarioId: user.id,
       nombre: dto.nombre || file.originalname,
-      ruta: `/uploads/${file.filename}`,
+      ruta: key,
       tipo: file.mimetype,
       tamanoBytes: file.size,
       descripcion: dto.descripcion,
     });
     return this.docRepo.save(doc);
+  }
+
+  /** El bucket es privado — para ver/descargar un documento se genera una URL firmada de corta duración */
+  async getDocumentoUrl(expedienteId: number, documentoId: number, user: any): Promise<{ url: string; expiraEnSegundos: number }> {
+    const exp = await this.findOne(expedienteId, user);
+    const doc = exp.documentos?.find((d) => d.id === documentoId);
+    if (!doc) throw new NotFoundException('Documento no encontrado');
+    const expiraEnSegundos = 300;
+    const url = await this.s3Service.getPresignedUrl(doc.ruta, expiraEnSegundos);
+    return { url, expiraEnSegundos };
+  }
+
+  /** despachos/{despachoId}-{slug}/{clienteId}-{slug}/{numero de expediente}/{archivo}
+   *  Si el expediente tiene varios clientes, se usa el primero como "dueño" de la carpeta —
+   *  es solo organización dentro de S3, no afecta a quién pertenece el expediente en la BD. */
+  private async buildS3Key(exp: Expediente, nombreOriginal: string): Promise<string> {
+    const despacho = await this.despachoRepo.findOne({ where: { id: exp.despachoId } });
+    const despachoCarpeta = `${exp.despachoId}-${slugify(despacho?.nombre || 'despacho')}`;
+
+    const clientePrincipal = exp.clientes?.[0];
+    const clienteCarpeta = clientePrincipal
+      ? `${clientePrincipal.id}-${slugify(`${clientePrincipal.nombre} ${clientePrincipal.apellido}`)}`
+      : 'sin-cliente';
+
+    const puntoExt = nombreOriginal.lastIndexOf('.');
+    const base = puntoExt > 0 ? nombreOriginal.slice(0, puntoExt) : nombreOriginal;
+    const ext = puntoExt > 0 ? nombreOriginal.slice(puntoExt) : '';
+    const archivo = `${Date.now()}-${slugify(base)}${ext}`;
+
+    return `despachos/${despachoCarpeta}/${clienteCarpeta}/${exp.numero}/${archivo}`;
   }
 
   async addObservacion(expedienteId: number, contenido: string, user: any) {

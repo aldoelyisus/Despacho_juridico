@@ -6,6 +6,7 @@ import { Cliente } from '../clientes/entities/cliente.entity';
 import { Pago } from '../pagos/entities/pago.entity';
 import { EventoAgenda } from '../agenda/entities/evento-agenda.entity';
 import { LogAuditoria } from '../auditoria/entities/log-auditoria.entity';
+import { EstadisticasService } from '../estadisticas/estadisticas.service';
 
 @Injectable()
 export class DashboardService {
@@ -15,6 +16,7 @@ export class DashboardService {
     @InjectRepository(Pago) private pagoRepo: Repository<Pago>,
     @InjectRepository(EventoAgenda) private eventoRepo: Repository<EventoAgenda>,
     @InjectRepository(LogAuditoria) private logRepo: Repository<LogAuditoria>,
+    private estadisticasService: EstadisticasService,
   ) {}
 
   async getKpis(despachoId: number) {
@@ -66,17 +68,11 @@ export class DashboardService {
     const inicioSemana = new Date();
     inicioSemana.setDate(now.getDate() - now.getDay());
 
-    const [totalMes, totalSemana, porServicio] = await Promise.all([
-      this.pagoRepo
-        .createQueryBuilder('p')
-        .select('SUM(p.montoPagado)', 'total')
-        .where('p.despachoId = :despachoId AND p.createdAt >= :inicio', { despachoId, inicio: inicioMes })
-        .getRawOne(),
-      this.pagoRepo
-        .createQueryBuilder('p')
-        .select('SUM(p.montoPagado)', 'total')
-        .where('p.despachoId = :despachoId AND p.createdAt >= :inicio', { despachoId, inicio: inicioSemana })
-        .getRawOne(),
+    // Ingresos por rango: se apoyan en el rollup diario (ingresos_diarios_despacho) en vez de
+    // volver a sumar cada abono cada vez — con años de historial esto se mantiene barato.
+    const [ingresosMes, ingresosSemana, porServicio] = await Promise.all([
+      this.estadisticasService.getIngresoRango(despachoId, inicioMes, now),
+      this.estadisticasService.getIngresoRango(despachoId, inicioSemana, now),
       this.pagoRepo
         .createQueryBuilder('p')
         .select('p.servicioId', 'servicioId')
@@ -86,11 +82,7 @@ export class DashboardService {
         .getRawMany(),
     ]);
 
-    return {
-      ingresosMes: +(totalMes?.total || 0),
-      ingresosSemana: +(totalSemana?.total || 0),
-      porServicio,
-    };
+    return { ingresosMes, ingresosSemana, porServicio };
   }
 
   private async getAgendaStats(despachoId: number) {
@@ -141,23 +133,24 @@ export class DashboardService {
       .getRawMany();
   }
 
+  /** Ingresos de los últimos N meses — lee del consolidado mensual (rápido incluso con años de
+   *  historial); solo el mes en curso se calcula combinando lo ya cerrado con el día de hoy. */
   async getIngresosHistorico(despachoId: number, meses = 6) {
+    const hoy = new Date();
     const result: { mes: string; total: number }[] = [];
     for (let i = meses - 1; i >= 0; i--) {
-      const fecha = new Date();
-      fecha.setMonth(fecha.getMonth() - i);
-      const inicio = new Date(fecha.getFullYear(), fecha.getMonth(), 1);
-      const fin = new Date(fecha.getFullYear(), fecha.getMonth() + 1, 0);
-      const data = await this.pagoRepo
-        .createQueryBuilder('p')
-        .select('SUM(p.montoPagado)', 'total')
-        .where('p.despachoId = :despachoId AND p.createdAt BETWEEN :inicio AND :fin', { despachoId, inicio, fin })
-        .getRawOne();
+      const fecha = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
+      const total = await this.estadisticasService.getIngresoMes(despachoId, fecha.getFullYear(), fecha.getMonth() + 1);
       result.push({
-        mes: inicio.toLocaleString('es-MX', { month: 'short', year: '2-digit' }),
-        total: +(data?.total || 0),
+        mes: fecha.toLocaleString('es-MX', { month: 'short', year: '2-digit' }),
+        total,
       });
     }
     return result;
+  }
+
+  /** Tendencia de expedientes por estatus de los últimos N días — foto diaria, nunca sumada entre fechas */
+  async getExpedientesHistorico(despachoId: number, dias = 30) {
+    return this.estadisticasService.getExpedientesHistorico(despachoId, dias);
   }
 }

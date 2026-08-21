@@ -14,6 +14,9 @@ export const expedientesApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }).then((r) => r.data),
 
+  getDocumentoUrl: (id: number, documentoId: number) =>
+    api.get(`/expedientes/${id}/documentos/${documentoId}/url`).then((r) => r.data),
+
   addObservacion: (id: number, contenido: string) =>
     api.post(`/expedientes/${id}/observaciones`, { contenido }).then((r) => r.data),
 

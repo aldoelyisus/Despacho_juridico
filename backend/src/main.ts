@@ -4,6 +4,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { AuthService } from './auth/auth.service';
+import { EstadisticasService } from './estadisticas/estadisticas.service';
 import { join } from 'path';
 
 async function bootstrap() {
@@ -74,5 +75,10 @@ async function bootstrap() {
   // Seed root user and default roles on first boot
   const authService = app.get(AuthService);
   await authService.seedSystem();
+
+  // Reconstruye ingresos_diarios_despacho / ingresos_mensuales_despacho desde el historial
+  // existente — solo la primera vez que arranca con esta funcionalidad (es un no-op después).
+  const estadisticasService = app.get(EstadisticasService);
+  await estadisticasService.ensureBackfillIngresos();
 }
 bootstrap();

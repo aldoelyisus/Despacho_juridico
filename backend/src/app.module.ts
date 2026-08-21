@@ -17,6 +17,7 @@ import { RootModule } from './root/root.module';
 import { DescuentosModule } from './descuentos/descuentos.module';
 import { PlanesModule } from './planes/planes.module';
 import { FacturacionModule } from './facturacion/facturacion.module';
+import { EstadisticasModule } from './estadisticas/estadisticas.module';
 import { AuditInterceptor } from './common/interceptors/audit.interceptor';
 
 @Module({
@@ -53,6 +54,7 @@ import { AuditInterceptor } from './common/interceptors/audit.interceptor';
     DescuentosModule,
     PlanesModule,
     FacturacionModule,
+    EstadisticasModule,
   ],
   providers: [
     {

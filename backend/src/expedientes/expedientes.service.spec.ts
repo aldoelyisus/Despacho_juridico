@@ -10,9 +10,11 @@ import { Observacion } from './entities/observacion.entity';
 import { EventoExpediente } from './entities/evento-expediente.entity';
 import { Cliente } from '../clientes/entities/cliente.entity';
 import { Usuario } from '../usuarios/entities/usuario.entity';
+import { Despacho } from '../despachos/entities/despacho.entity';
 import { CreateExpedienteDto } from './dto/create-expediente.dto';
 import { CreateEventoDto } from './dto/create-evento.dto';
 import { AuditoriaService } from '../auditoria/auditoria.service';
+import { S3Service } from '../common/services/s3.service';
 
 function createQueryBuilderMock(overrides: Record<string, any> = {}) {
   return {
@@ -55,7 +57,9 @@ describe('ExpedientesService', () => {
   let eventoRepo: ReturnType<typeof repoMockFactory>;
   let clienteRepo: ReturnType<typeof repoMockFactory>;
   let usuarioRepo: ReturnType<typeof repoMockFactory>;
+  let despachoRepo: ReturnType<typeof repoMockFactory>;
   let auditoriaService: { log: jest.Mock };
+  let s3Service: { uploadFile: jest.Mock; getPresignedUrl: jest.Mock; deleteFile: jest.Mock };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -67,7 +71,16 @@ describe('ExpedientesService', () => {
         { provide: getRepositoryToken(EventoExpediente), useFactory: repoMockFactory },
         { provide: getRepositoryToken(Cliente), useFactory: repoMockFactory },
         { provide: getRepositoryToken(Usuario), useFactory: repoMockFactory },
+        { provide: getRepositoryToken(Despacho), useFactory: repoMockFactory },
         { provide: AuditoriaService, useValue: { log: jest.fn().mockResolvedValue(undefined) } },
+        {
+          provide: S3Service,
+          useValue: {
+            uploadFile: jest.fn().mockResolvedValue(undefined),
+            getPresignedUrl: jest.fn().mockResolvedValue('https://signed-url.example.com/archivo'),
+            deleteFile: jest.fn().mockResolvedValue(undefined),
+          },
+        },
       ],
     }).compile();
 
@@ -78,7 +91,10 @@ describe('ExpedientesService', () => {
     eventoRepo = module.get(getRepositoryToken(EventoExpediente));
     clienteRepo = module.get(getRepositoryToken(Cliente));
     usuarioRepo = module.get(getRepositoryToken(Usuario));
+    despachoRepo = module.get(getRepositoryToken(Despacho));
     auditoriaService = module.get(AuditoriaService) as any;
+    s3Service = module.get(S3Service) as any;
+    despachoRepo.findOne.mockResolvedValue({ id: 1, nombre: 'Bufete García Núñez' });
   });
 
   describe('findAll', () => {
@@ -314,27 +330,81 @@ describe('ExpedientesService', () => {
     it('throws NotFoundException when the expediente is not accessible', async () => {
       const qb = createQueryBuilderMock({ getOne: jest.fn().mockResolvedValue(null) });
       repo.createQueryBuilder.mockReturnValue(qb);
-      const file = { originalname: 'a.pdf', filename: 'x.pdf', mimetype: 'application/pdf', size: 100 } as any;
+      const file = { originalname: 'a.pdf', buffer: Buffer.from('x'), mimetype: 'application/pdf', size: 100 } as any;
       await expect(service.addDocumento(1, file, {}, colaboradorUser)).rejects.toThrow(NotFoundException);
     });
 
-    it('saves the document scoped to the despacho and uploader', async () => {
-      const qb = createQueryBuilderMock({ getOne: jest.fn().mockResolvedValue({ id: 1, despachoId: 1 }) });
+    it('uploads the file buffer to S3 under despacho/cliente/expediente and saves the returned key as ruta', async () => {
+      const qb = createQueryBuilderMock({
+        getOne: jest.fn().mockResolvedValue({
+          id: 1, despachoId: 1, numero: 'EXP-2026-0001',
+          clientes: [{ id: 4, nombre: 'José', apellido: 'Pérez' }],
+        }),
+      });
       repo.createQueryBuilder.mockReturnValue(qb);
-      const file = { originalname: 'contrato.pdf', filename: 'uuid.pdf', mimetype: 'application/pdf', size: 2048 } as any;
+      const file = { originalname: 'contrato.pdf', buffer: Buffer.from('contenido'), mimetype: 'application/pdf', size: 2048 } as any;
       const result = await service.addDocumento(1, file, { descripcion: 'Firmado' }, adminUser);
+
+      expect(s3Service.uploadFile).toHaveBeenCalledTimes(1);
+      const [key, buffer, contentType] = s3Service.uploadFile.mock.calls[0];
+      expect(key).toMatch(/^despachos\/1-bufete-garcia-nunez\/4-jose-perez\/EXP-2026-0001\/\d+-contrato\.pdf$/);
+      expect(buffer).toBe(file.buffer);
+      expect(contentType).toBe('application/pdf');
+
       expect(result).toMatchObject({
         expedienteId: 1, despachoId: 1, usuarioId: adminUser.id,
-        nombre: 'contrato.pdf', ruta: '/uploads/uuid.pdf', descripcion: 'Firmado',
+        nombre: 'contrato.pdf', ruta: key, descripcion: 'Firmado',
       });
     });
 
-    it('uses the provided nombre override instead of the original filename', async () => {
-      const qb = createQueryBuilderMock({ getOne: jest.fn().mockResolvedValue({ id: 1, despachoId: 1 }) });
+    it('falls back to a "sin-cliente" folder when the expediente has no clientes', async () => {
+      const qb = createQueryBuilderMock({
+        getOne: jest.fn().mockResolvedValue({ id: 1, despachoId: 1, numero: 'EXP-2026-0002', clientes: [] }),
+      });
       repo.createQueryBuilder.mockReturnValue(qb);
-      const file = { originalname: 'contrato.pdf', filename: 'uuid.pdf', mimetype: 'application/pdf', size: 2048 } as any;
+      const file = { originalname: 'foto.jpg', buffer: Buffer.from('x'), mimetype: 'image/jpeg', size: 10 } as any;
+      await service.addDocumento(1, file, {}, adminUser);
+      const [key] = s3Service.uploadFile.mock.calls[0];
+      expect(key).toMatch(/^despachos\/1-bufete-garcia-nunez\/sin-cliente\/EXP-2026-0002\//);
+    });
+
+    it('uses the provided nombre override instead of the original filename', async () => {
+      const qb = createQueryBuilderMock({
+        getOne: jest.fn().mockResolvedValue({ id: 1, despachoId: 1, numero: 'EXP-2026-0001', clientes: [] }),
+      });
+      repo.createQueryBuilder.mockReturnValue(qb);
+      const file = { originalname: 'contrato.pdf', buffer: Buffer.from('x'), mimetype: 'application/pdf', size: 2048 } as any;
       const result = await service.addDocumento(1, file, { nombre: 'Contrato final' }, adminUser);
       expect(result.nombre).toBe('Contrato final');
+    });
+  });
+
+  describe('getDocumentoUrl', () => {
+    it('throws NotFoundException when the expediente is not accessible', async () => {
+      const qb = createQueryBuilderMock({ getOne: jest.fn().mockResolvedValue(null) });
+      repo.createQueryBuilder.mockReturnValue(qb);
+      await expect(service.getDocumentoUrl(1, 1, colaboradorUser)).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws NotFoundException when the documento does not belong to the expediente', async () => {
+      const qb = createQueryBuilderMock({
+        getOne: jest.fn().mockResolvedValue({ id: 1, despachoId: 1, documentos: [{ id: 5, ruta: 'x' }] }),
+      });
+      repo.createQueryBuilder.mockReturnValue(qb);
+      await expect(service.getDocumentoUrl(1, 999, adminUser)).rejects.toThrow(NotFoundException);
+    });
+
+    it('returns a presigned URL valid for 5 minutes for the stored S3 key', async () => {
+      const qb = createQueryBuilderMock({
+        getOne: jest.fn().mockResolvedValue({
+          id: 1, despachoId: 1,
+          documentos: [{ id: 5, ruta: 'despachos/1-bufete/4-jose/EXP-2026-0001/archivo.pdf' }],
+        }),
+      });
+      repo.createQueryBuilder.mockReturnValue(qb);
+      const result = await service.getDocumentoUrl(1, 5, adminUser);
+      expect(s3Service.getPresignedUrl).toHaveBeenCalledWith('despachos/1-bufete/4-jose/EXP-2026-0001/archivo.pdf', 300);
+      expect(result).toEqual({ url: 'https://signed-url.example.com/archivo', expiraEnSegundos: 300 });
     });
   });
 

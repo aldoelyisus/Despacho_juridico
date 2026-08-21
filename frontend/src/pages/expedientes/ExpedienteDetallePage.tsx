@@ -143,6 +143,7 @@ export default function ExpedienteDetallePage() {
   const [abonoModal, setAbonoModal] = useState<any>(null);
   const [recibo, setRecibo] = useState<{ pago: any; abono: any } | null>(null);
   const [expandedPagoId, setExpandedPagoId] = useState<number | null>(null);
+  const [verDocumentoId, setVerDocumentoId] = useState<number | null>(null);
   const { askConfirm, confirmDialog } = useConfirmDialog();
 
   const { data: exp, isLoading } = useQuery({
@@ -196,6 +197,18 @@ export default function ExpedienteDetallePage() {
     onSuccess: () => { invalidate(); toast.success('Documento subido'); },
     onError: (err: any) => toast.error(getErrorMessage(err, 'No se pudo subir el archivo')),
   });
+
+  const handleVerDocumento = async (documentoId: number) => {
+    setVerDocumentoId(documentoId);
+    try {
+      const { url } = await expedientesApi.getDocumentoUrl(+id!, documentoId);
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch (err: any) {
+      toast.error(getErrorMessage(err, 'No se pudo obtener el enlace del documento'));
+    } finally {
+      setVerDocumentoId(null);
+    }
+  };
 
   if (isLoading) return <div className="dashboard-loading"><div className="spinner spinner-lg" /></div>;
   if (!exp) return <div>Expediente no encontrado</div>;
@@ -396,7 +409,13 @@ export default function ExpedienteDetallePage() {
                         </div>
                         {d.descripcion && <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 2 }}>{d.descripcion}</div>}
                       </div>
-                      <a href={`http://localhost:3001${d.ruta}`} target="_blank" rel="noopener noreferrer" className="btn btn-ghost btn-sm">Ver</a>
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        disabled={verDocumentoId === d.id}
+                        onClick={() => handleVerDocumento(d.id)}
+                      >
+                        {verDocumentoId === d.id ? <Loader2 size={14} className="spinning" /> : 'Ver'}
+                      </button>
                     </div>
                   ))}
                 </div>

@@ -29,4 +29,13 @@ export class DashboardController {
   ) {
     return this.service.getIngresosHistorico(despachoId, meses || 6);
   }
+
+  @Get('expedientes-historico')
+  @ApiOperation({ summary: 'Tendencia de expedientes por estatus de los últimos N días (foto diaria, no acumulativa)' })
+  getExpedientesHistorico(
+    @CurrentUser('despachoId') despachoId: number,
+    @Query('dias') dias: number,
+  ) {
+    return this.service.getExpedientesHistorico(despachoId, dias || 30);
+  }
 }

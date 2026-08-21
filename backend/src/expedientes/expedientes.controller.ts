@@ -3,9 +3,7 @@ import {
   Query, ParseIntPipe, UseInterceptors, UploadedFile, Ip,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import { extname } from 'path';
-import { v4 as uuid } from 'uuid';
+import { memoryStorage } from 'multer';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes, ApiQuery, ApiResponse } from '@nestjs/swagger';
 import { ExpedientesService } from './expedientes.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -80,16 +78,13 @@ export class ExpedientesController {
   }
 
   @Post(':id/documentos')
-  @ApiOperation({ summary: 'Subir documento al expediente' })
+  @ApiOperation({ summary: 'Subir documento al expediente (se guarda en S3, bajo despacho/cliente/expediente)' })
   @ApiConsumes('multipart/form-data')
   @ApiResponse({ status: 400, description: 'No se envió ningún archivo' })
   @ApiResponse({ status: 404, description: 'Expediente no encontrado o sin acceso' })
   @UseInterceptors(
     FileInterceptor('archivo', {
-      storage: diskStorage({
-        destination: './uploads',
-        filename: (_req, file, cb) => cb(null, `${uuid()}${extname(file.originalname)}`),
-      }),
+      storage: memoryStorage(), // en memoria: se sube a S3 en el service, nunca toca disco local
       limits: { fileSize: 52428800 },
     }),
   )
@@ -100,6 +95,17 @@ export class ExpedientesController {
     @CurrentUser() user: any,
   ) {
     return this.service.addDocumento(id, file, dto, user);
+  }
+
+  @Get(':id/documentos/:documentoId/url')
+  @ApiOperation({ summary: 'Obtener una URL temporal (5 min) para ver/descargar un documento del bucket privado de S3' })
+  @ApiResponse({ status: 404, description: 'Expediente o documento no encontrado' })
+  getDocumentoUrl(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('documentoId', ParseIntPipe) documentoId: number,
+    @CurrentUser() user: any,
+  ) {
+    return this.service.getDocumentoUrl(id, documentoId, user);
   }
 
   @Post(':id/observaciones')
