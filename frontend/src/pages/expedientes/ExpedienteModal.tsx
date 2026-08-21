@@ -1,17 +1,32 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { X, Loader2, UserCheck, Users, Briefcase } from 'lucide-react';
+import { X, Loader2, Users, Briefcase, FolderOpen, Info, CalendarClock, StickyNote } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { expedientesApi } from '../../api/expedientes.api';
 import { catalogosApi } from '../../api/catalogos.api';
 import { clientesApi } from '../../api/clientes.api';
 import { usuariosApi } from '../../api/usuarios.api';
+import { getErrorMessage } from '../../utils/errors';
+import ModalErrorBanner from '../../components/ModalErrorBanner';
 
 const ESTADOS = ['activo', 'en_proceso', 'cerrado', 'ganado', 'perdido', 'suspendido'];
 const ESTADO_LABELS: Record<string, string> = {
   activo: 'Activo', en_proceso: 'En proceso', cerrado: 'Cerrado',
   ganado: 'Ganado', perdido: 'Perdido', suspendido: 'Suspendido',
 };
+
+// ── Encabezado de sección — agrupa visualmente los campos relacionados ──────
+function SectionHeader({ icon: Icon, title }: { icon: any; title: string }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 6, margin: '0 0 var(--sp-3)',
+      fontSize: '0.75rem', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase',
+      color: 'var(--text-muted)',
+    }}>
+      <Icon size={13} /> {title}
+    </div>
+  );
+}
 
 // ── Chip reutilizable ──────────────────────────────────────────────────────
 function Chip({ label, color, onRemove }: { label: string; color: string; onRemove: () => void }) {
@@ -80,15 +95,27 @@ export default function ExpedienteModal({ expediente, onClose, onSuccess }: any)
   const [form, setForm] = useState({
     titulo: expediente?.titulo || '',
     descripcion: expediente?.descripcion || '',
-    areaId: expediente?.areaId || '',
+    areaId: expediente?.areaId ? String(expediente.areaId) : '',
+    subareaId: expediente?.subareaId ? String(expediente.subareaId) : '',
     estado: expediente?.estado || 'activo',
     fechaInicio: expediente?.fechaInicio
       ? new Date(expediente.fechaInicio).toISOString().split('T')[0]
       : '',
+    fechaCierre: expediente?.fechaCierre
+      ? new Date(expediente.fechaCierre).toISOString().split('T')[0]
+      : '',
     notas: expediente?.notas || '',
   });
+  const [error, setError] = useState<string | null>(null);
 
-  const { data: areas } = useQuery({ queryKey: ['areas'], queryFn: catalogosApi.areas });
+  const { data: areasData } = useQuery({ queryKey: ['areas'], queryFn: () => catalogosApi.areas({ limite: 100 }) });
+  const areas = areasData?.items || [];
+  const { data: subareasData } = useQuery({
+    queryKey: ['subareas', form.areaId],
+    queryFn: () => catalogosApi.subareas({ areaId: form.areaId, limite: 100 }),
+    enabled: !!form.areaId,
+  });
+  const subareas = subareasData?.items || [];
   const { data: clientesData } = useQuery({
     queryKey: ['clientes-list'],
     queryFn: () => clientesApi.list({ limite: 200 }),
@@ -101,6 +128,14 @@ export default function ExpedienteModal({ expediente, onClose, onSuccess }: any)
   const clientes = clientesData?.items || [];
   const usuarios = usuariosData?.items || usuariosData || [];
 
+  // Si cambia el área, la subárea seleccionada deja de ser válida
+  useEffect(() => {
+    if (form.subareaId && !subareas.some((s: any) => String(s.id) === form.subareaId)) {
+      setForm((f) => ({ ...f, subareaId: '' }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.areaId, subareasData]);
+
   const mutation = useMutation({
     mutationFn: (data: any) =>
       isEdit ? expedientesApi.update(expediente.id, data) : expedientesApi.create(data),
@@ -108,18 +143,35 @@ export default function ExpedienteModal({ expediente, onClose, onSuccess }: any)
       toast.success(isEdit ? 'Expediente actualizado' : 'Expediente creado');
       onSuccess();
     },
-    onError: (e: any) => toast.error(e.response?.data?.message || 'Error al guardar'),
+    onError: (err: any) => setError(getErrorMessage(err, 'Error al guardar el expediente')),
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isEdit && clienteIds.length === 0) {
-      toast.error('Debes asociar al menos un cliente al expediente');
+    setError(null);
+
+    if (!form.titulo.trim()) {
+      setError('El título del expediente es obligatorio');
       return;
     }
+    if (!isEdit && clienteIds.length === 0) {
+      setError('Debes asociar al menos un cliente al expediente');
+      return;
+    }
+    if (form.fechaCierre && form.fechaInicio && form.fechaCierre < form.fechaInicio) {
+      setError('La fecha de cierre no puede ser anterior a la fecha de inicio');
+      return;
+    }
+
     mutation.mutate({
-      ...form,
+      titulo: form.titulo,
+      descripcion: form.descripcion || undefined,
       areaId: form.areaId ? +form.areaId : undefined,
+      subareaId: form.subareaId ? +form.subareaId : undefined,
+      estado: form.estado,
+      fechaInicio: form.fechaInicio || undefined,
+      fechaCierre: form.fechaCierre || undefined,
+      notas: form.notas || undefined,
       clienteIds,
       colaboradorIds,
     });
@@ -127,24 +179,42 @@ export default function ExpedienteModal({ expediente, onClose, onSuccess }: any)
 
   return (
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal modal-lg">
+      <div className="modal modal-xl">
         <div className="modal-header">
-          <h3>{isEdit ? 'Editar Expediente' : 'Nuevo Expediente'}</h3>
+          <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <FolderOpen size={18} style={{ color: 'var(--accent-400)' }} />
+            {isEdit ? `Editar Expediente ${expediente.numero || ''}` : 'Nuevo Expediente'}
+          </h3>
           <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={18} /></button>
         </div>
         <form onSubmit={handleSubmit}>
           <div className="modal-body">
-            <div className="form-grid-2">
+            <ModalErrorBanner message={error} />
 
-              {/* TÍTULO */}
+            {/* ── INFORMACIÓN GENERAL ──────────────────────────────────── */}
+            <SectionHeader icon={Info} title="Información general" />
+            <div className="form-grid-2" style={{ marginBottom: 'var(--sp-5)' }}>
               <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                <label className="form-label">Título del Expediente *</label>
-                <input id="exp-titulo" type="text" className="form-input" required
+                <label className="form-label">Título del expediente *</label>
+                <input id="exp-titulo" type="text" className="form-input" required autoFocus
+                  placeholder="Ej: Divorcio incausado - Familia Ramírez"
                   value={form.titulo}
                   onChange={(e) => setForm(f => ({ ...f, titulo: e.target.value }))} />
               </div>
+              <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                <label className="form-label">Descripción</label>
+                <textarea id="exp-desc" className="form-textarea" rows={2}
+                  placeholder="Resumen breve del caso"
+                  value={form.descripcion}
+                  onChange={(e) => setForm(f => ({ ...f, descripcion: e.target.value }))} />
+              </div>
+            </div>
 
-              {/* CLIENTES */}
+            <div className="divider" />
+
+            {/* ── PERSONAS INVOLUCRADAS ────────────────────────────────── */}
+            <SectionHeader icon={Users} title="Personas involucradas" />
+            <div className="form-grid-2" style={{ marginBottom: 'var(--sp-5)' }}>
               <ChipSelector
                 id="exp-clientes"
                 label="Clientes asociados"
@@ -160,8 +230,6 @@ export default function ExpedienteModal({ expediente, onClose, onSuccess }: any)
                 }
                 warning="⚠ Debes asociar al menos un cliente para registrar cobros"
               />
-
-              {/* ABOGADOS / COLABORADORES */}
               <ChipSelector
                 id="exp-colaboradores"
                 label="Abogados / Colaboradores"
@@ -176,8 +244,13 @@ export default function ExpedienteModal({ expediente, onClose, onSuccess }: any)
                   setColaboradorIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
                 }
               />
+            </div>
 
-              {/* ÁREA */}
+            <div className="divider" />
+
+            {/* ── CLASIFICACIÓN ─────────────────────────────────────────── */}
+            <SectionHeader icon={FolderOpen} title="Clasificación del caso" />
+            <div className="form-grid-2" style={{ marginBottom: 'var(--sp-5)' }}>
               <div className="form-group">
                 <label className="form-label">Área del Derecho</label>
                 <select id="exp-area" className="form-select" value={form.areaId}
@@ -186,8 +259,22 @@ export default function ExpedienteModal({ expediente, onClose, onSuccess }: any)
                   {areas?.map((a: any) => <option key={a.id} value={a.id}>{a.nombre}</option>)}
                 </select>
               </div>
+              <div className="form-group">
+                <label className="form-label">Subárea</label>
+                <select id="exp-subarea" className="form-select" value={form.subareaId}
+                  disabled={!form.areaId}
+                  onChange={(e) => setForm(f => ({ ...f, subareaId: e.target.value }))}>
+                  <option value="">{form.areaId ? 'Seleccionar subárea...' : 'Primero elige un área'}</option>
+                  {subareas?.map((s: any) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+                </select>
+              </div>
+            </div>
 
-              {/* ESTADO */}
+            <div className="divider" />
+
+            {/* ── FECHAS Y ESTADO ──────────────────────────────────────── */}
+            <SectionHeader icon={CalendarClock} title="Fechas y estado" />
+            <div className="form-grid-3" style={{ marginBottom: isEdit ? 'var(--sp-3)' : 'var(--sp-5)' }}>
               <div className="form-group">
                 <label className="form-label">Estado</label>
                 <select id="exp-estado" className="form-select" value={form.estado}
@@ -195,54 +282,51 @@ export default function ExpedienteModal({ expediente, onClose, onSuccess }: any)
                   {ESTADOS.map(s => <option key={s} value={s}>{ESTADO_LABELS[s]}</option>)}
                 </select>
               </div>
-
-              {/* FECHA INICIO */}
               <div className="form-group">
-                <label className="form-label">Fecha de Inicio</label>
-                <input id="exp-fecha" type="date" className="form-input" value={form.fechaInicio}
+                <label className="form-label">Fecha de inicio</label>
+                <input id="exp-fecha-inicio" type="date" className="form-input" value={form.fechaInicio}
                   onChange={(e) => setForm(f => ({ ...f, fechaInicio: e.target.value }))} />
               </div>
+              <div className="form-group">
+                <label className="form-label">Fecha de cierre</label>
+                <input id="exp-fecha-cierre" type="date" className="form-input" value={form.fechaCierre}
+                  onChange={(e) => setForm(f => ({ ...f, fechaCierre: e.target.value }))} />
+              </div>
+            </div>
 
-              {/* COSTO ACUMULADO — solo lectura en edición */}
-              {isEdit && (
-                <div className="form-group">
-                  <label className="form-label">Costo Total Acumulado</label>
-                  <div style={{
-                    padding: 'var(--sp-3) var(--sp-4)', background: 'var(--bg-3)',
-                    borderRadius: 'var(--radius)', fontWeight: 700, fontSize: '1.1rem',
-                    color: '#10b981', border: '1px solid var(--border)',
-                  }}>
-                    ${Number(expediente.montoTotal || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 400, marginLeft: 8 }}>
-                      (se actualiza al registrar cobros)
-                    </span>
-                  </div>
+            {/* COSTO ACUMULADO — solo lectura en edición */}
+            {isEdit && (
+              <div className="form-group" style={{ marginBottom: 'var(--sp-5)' }}>
+                <label className="form-label">Costo total acumulado</label>
+                <div style={{
+                  padding: 'var(--sp-3) var(--sp-4)', background: 'var(--bg-elevated)',
+                  borderRadius: 'var(--radius-md)', fontWeight: 700, fontSize: '1.1rem',
+                  color: 'var(--success)', border: '1px solid var(--border-subtle)',
+                }}>
+                  ${Number(expediente.montoTotal || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 400, marginLeft: 8 }}>
+                    (se actualiza al registrar cobros)
+                  </span>
                 </div>
-              )}
-
-              {/* DESCRIPCIÓN */}
-              <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                <label className="form-label">Descripción</label>
-                <textarea id="exp-desc" className="form-textarea" rows={3}
-                  value={form.descripcion}
-                  onChange={(e) => setForm(f => ({ ...f, descripcion: e.target.value }))} />
               </div>
+            )}
 
-              {/* NOTAS */}
-              <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                <label className="form-label">Notas</label>
-                <textarea id="exp-notas" className="form-textarea" rows={2}
-                  value={form.notas}
-                  onChange={(e) => setForm(f => ({ ...f, notas: e.target.value }))} />
-              </div>
+            <div className="divider" />
 
+            {/* ── NOTAS ────────────────────────────────────────────────── */}
+            <SectionHeader icon={StickyNote} title="Notas internas" />
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <textarea id="exp-notas" className="form-textarea" rows={2}
+                placeholder="Notas visibles solo para el equipo del despacho"
+                value={form.notas}
+                onChange={(e) => setForm(f => ({ ...f, notas: e.target.value }))} />
             </div>
           </div>
           <div className="modal-footer">
             <button type="button" className="btn btn-secondary" onClick={onClose}>Cancelar</button>
             <button id="exp-submit" type="submit" className="btn btn-primary" disabled={mutation.isPending}>
               {mutation.isPending && <Loader2 size={16} className="spinning" />}
-              {isEdit ? 'Actualizar' : 'Crear Expediente'}
+              {isEdit ? 'Guardar cambios' : 'Crear expediente'}
             </button>
           </div>
         </form>

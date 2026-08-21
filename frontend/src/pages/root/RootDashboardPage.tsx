@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { rootApi } from '../../api/root.api';
 import {
-  Building2, Users, TrendingUp, AlertTriangle,
+  Building2, Users, AlertTriangle,
   CheckCircle2, XCircle, Clock, DollarSign,
 } from 'lucide-react';
 
@@ -56,7 +56,7 @@ export default function RootDashboardPage() {
           color="#f59e0b" />
         <StatCard icon={Clock}         label="Mensualidades Pendientes" value={data?.mensualidadesPendientes ?? 0} color="#3b82f6" />
         <StatCard icon={AlertTriangle} label="Mensualidades Vencidas"   value={data?.mensualidadesVencidas ?? 0}   color="#ef4444"
-          sub={data?.mensualidadesVencidas > 0 ? '⚠ Requieren atención' : undefined} />
+          sub={data?.mensualidadesVencidas > 0 ? 'Requieren atención' : undefined} />
       </div>
 
       {/* Tabla por despacho */}
@@ -78,7 +78,7 @@ export default function RootDashboardPage() {
                   <td style={{ fontWeight: 500 }}>{d.nombre}</td>
                   <td>
                     <span className={`badge ${d.bloqueado ? 'badge-danger' : 'badge-success'}`}>
-                      {d.bloqueado ? '🔒 Bloqueado' : '✅ Activo'}
+                      {d.bloqueado ? 'Bloqueado' : 'Activo'}
                     </span>
                   </td>
                   <td>

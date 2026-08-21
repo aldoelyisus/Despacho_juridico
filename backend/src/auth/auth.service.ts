@@ -11,10 +11,17 @@ import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
 import * as speakeasy from 'speakeasy';
 import * as QRCode from 'qrcode';
+import { randomInt } from 'crypto';
 import { Usuario } from '../usuarios/entities/usuario.entity';
 import { Despacho } from '../despachos/entities/despacho.entity';
 import { Rol } from '../usuarios/entities/rol.entity';
 import { LoginDto } from './dto/login.dto';
+import { AuditoriaService } from '../auditoria/auditoria.service';
+
+// Hash bcrypt fijo (no corresponde a ninguna contraseña real) usado para comparar cuando
+// el usuario no existe, así el tiempo de respuesta del login no delata si el correo está
+// registrado (mitigación de timing attack / enumeración de usuarios).
+const DUMMY_PASSWORD_HASH = '$2b$12$a1VKQ0qLuDZYWhXMd3lX5uYgaUFMHOgZ9bl1zDfFljXyx.XQcTGYq';
 
 @Injectable()
 export class AuthService {
@@ -24,18 +31,41 @@ export class AuthService {
     @InjectRepository(Rol)      private rolRepo: Repository<Rol>,
     private jwtService: JwtService,
     private config: ConfigService,
+    private auditoriaService: AuditoriaService,
   ) {}
 
+  private get maxIntentos(): number {
+    return Number(this.config.get('LOGIN_MAX_INTENTOS', 5));
+  }
+
+  private get bloqueoMinutos(): number {
+    return Number(this.config.get('LOGIN_BLOQUEO_MINUTOS', 15));
+  }
+
   // ── LOGIN ─────────────────────────────────────────────────────────────────
-  async login(dto: LoginDto) {
+  async login(dto: LoginDto, ip?: string) {
     const usuario = await this.usuarioRepo.findOne({
       where: { email: dto.email.toLowerCase(), activo: true },
       relations: { rol: true, despacho: true },
     });
-    if (!usuario) throw new UnauthorizedException('Credenciales inválidas');
 
-    const valid = await bcrypt.compare(dto.password, usuario.password);
-    if (!valid) throw new UnauthorizedException('Credenciales inválidas');
+    if (usuario?.bloqueadoHasta && usuario.bloqueadoHasta.getTime() > Date.now()) {
+      await this.logIntento('LOGIN_BLOQUEADO', usuario, dto.email, ip);
+      const minutosRestantes = Math.ceil((usuario.bloqueadoHasta.getTime() - Date.now()) / 60000);
+      throw new ForbiddenException(
+        `Cuenta bloqueada temporalmente por múltiples intentos fallidos. Intenta de nuevo en ${minutosRestantes} minuto(s).`,
+      );
+    }
+
+    // Siempre se ejecuta bcrypt.compare (contra el hash real o uno dummy) para que el
+    // tiempo de respuesta sea el mismo exista o no el usuario / sea cual sea la contraseña.
+    const valid = await bcrypt.compare(dto.password, usuario?.password ?? DUMMY_PASSWORD_HASH);
+
+    if (!usuario || !valid) {
+      if (usuario) await this.registrarIntentoFallido(usuario, ip);
+      else await this.logIntento('LOGIN_FALLIDO', null, dto.email, ip);
+      throw new UnauthorizedException('Credenciales inválidas');
+    }
 
     const isRoot = usuario.rol?.nombre?.toLowerCase() === 'root';
 
@@ -49,10 +79,34 @@ export class AuthService {
       }
     }
 
-    await this.usuarioRepo.update(usuario.id, { ultimoAcceso: new Date() });
+    await this.usuarioRepo.update(usuario.id, {
+      ultimoAcceso: new Date(),
+      intentosFallidos: 0,
+      bloqueadoHasta: null as any,
+    });
+    usuario.intentosFallidos = 0;
+    usuario.bloqueadoHasta = null as any;
+
+    return this.postCredencialesValidas(usuario, isRoot, ip);
+  }
+
+  /**
+   * Continúa el flujo tras validar la contraseña (o al completar un cambio de contraseña
+   * forzado): exige cambio de contraseña si corresponde, luego 2FA si corresponde, o entrega tokens.
+   */
+  private async postCredencialesValidas(usuario: Usuario, isRoot: boolean, ip?: string) {
+    if (usuario.debeCambiarPassword) {
+      await this.logIntento('LOGIN_REQUIERE_CAMBIO_PASSWORD', usuario, usuario.email, ip);
+      const tempToken = this.jwtService.sign(
+        { sub: usuario.id, type: 'password_change_pending' },
+        { secret: this.config.get('JWT_SECRET'), expiresIn: '5m' },
+      );
+      return { requiresPasswordChange: true, tempToken };
+    }
 
     // Si tiene 2FA activo → emitir temp token en lugar de tokens reales
     if (usuario.twoFactorEnabled) {
+      await this.logIntento('LOGIN_REQUIERE_2FA', usuario, usuario.email, ip);
       const tempToken = this.jwtService.sign(
         { sub: usuario.id, type: '2fa_pending' },
         {
@@ -63,6 +117,7 @@ export class AuthService {
       return { requires2FA: true, tempToken };
     }
 
+    await this.logIntento('LOGIN_EXITOSO', usuario, usuario.email, ip);
     const tokens = await this.generateTokens(usuario);
     return {
       ...tokens,
@@ -70,8 +125,81 @@ export class AuthService {
     };
   }
 
+  private async registrarIntentoFallido(usuario: Usuario, ip?: string) {
+    const intentos = (usuario.intentosFallidos ?? 0) + 1;
+    if (intentos >= this.maxIntentos) {
+      const bloqueadoHasta = new Date(Date.now() + this.bloqueoMinutos * 60000);
+      await this.usuarioRepo.update(usuario.id, { intentosFallidos: 0, bloqueadoHasta });
+      await this.logIntento('CUENTA_BLOQUEADA', usuario, usuario.email, ip);
+    } else {
+      await this.usuarioRepo.update(usuario.id, { intentosFallidos: intentos });
+      await this.logIntento('LOGIN_FALLIDO', usuario, usuario.email, ip);
+    }
+  }
+
+  private async logIntento(accion: string, usuario: Usuario | null, emailIntentado: string, ip?: string) {
+    try {
+      await this.auditoriaService.log({
+        despachoId: usuario?.despachoId ?? null,
+        usuarioId: usuario?.id ?? null,
+        usuarioNombre: usuario ? `${usuario.nombre} ${usuario.apellido}` : emailIntentado,
+        accion,
+        modulo: 'AUTH',
+        descripcion: `${accion} — ${emailIntentado}`,
+        ip,
+      });
+    } catch {
+      // La auditoría nunca debe interrumpir el flujo de autenticación
+    }
+  }
+
+  // ── CAMBIO DE CONTRASEÑA OBLIGATORIO ────────────────────────────────────────
+  async changePasswordRequired(tempToken: string, newPassword: string, ip?: string) {
+    let payload: any;
+    try {
+      payload = this.jwtService.verify(tempToken, {
+        secret: this.config.get('JWT_SECRET'),
+      });
+    } catch {
+      throw new UnauthorizedException('Token temporal inválido o expirado');
+    }
+
+    if (payload.type !== 'password_change_pending') {
+      throw new UnauthorizedException('Token inválido');
+    }
+
+    const usuario = await this.usuarioRepo.findOne({
+      where: { id: payload.sub, activo: true },
+      relations: { rol: true, despacho: true },
+    });
+    if (!usuario) throw new UnauthorizedException('Usuario no encontrado');
+    if (!usuario.debeCambiarPassword) {
+      throw new BadRequestException('Este usuario no requiere cambiar su contraseña');
+    }
+
+    const sameAsCurrent = await bcrypt.compare(newPassword, usuario.password);
+    if (sameAsCurrent) {
+      throw new BadRequestException('La nueva contraseña debe ser diferente a la actual');
+    }
+
+    const hash = await bcrypt.hash(newPassword, 12);
+    await this.usuarioRepo.update(usuario.id, {
+      password: hash,
+      debeCambiarPassword: false,
+      intentosFallidos: 0,
+      bloqueadoHasta: null as any,
+    });
+    usuario.password = hash;
+    usuario.debeCambiarPassword = false;
+
+    await this.logIntento('PASSWORD_CAMBIO_COMPLETADO', usuario, usuario.email, ip);
+
+    const isRoot = usuario.rol?.nombre?.toLowerCase() === 'root';
+    return this.postCredencialesValidas(usuario, isRoot, ip);
+  }
+
   // ── VERIFICAR CÓDIGO 2FA ──────────────────────────────────────────────────
-  async verify2FA(tempToken: string, code: string) {
+  async verify2FA(tempToken: string, code: string, ip?: string) {
     let payload: any;
     try {
       payload = this.jwtService.verify(tempToken, {
@@ -105,8 +233,13 @@ export class AuthService {
     // Si no es TOTP válido, intentar backup code
     if (!isValid) {
       const backupUsed = await this.tryBackupCode(usuario, code);
-      if (!backupUsed) throw new UnauthorizedException('Código incorrecto');
+      if (!backupUsed) {
+        await this.logIntento('2FA_FALLIDO', usuario, usuario.email, ip);
+        throw new UnauthorizedException('Código incorrecto');
+      }
     }
+
+    await this.logIntento('2FA_EXITOSO', usuario, usuario.email, ip);
 
     const isRoot = usuario.rol?.nombre?.toLowerCase() === 'root';
     const tokens = await this.generateTokens(usuario);
@@ -217,13 +350,10 @@ export class AuthService {
 
   // ── HELPERS ───────────────────────────────────────────────────────────────
   private generateBackupCodes(): string[] {
-    const codes: string[] = [];
-    for (let i = 0; i < 8; i++) {
-      const part1 = Math.random().toString(36).substring(2, 6).toUpperCase();
-      const part2 = Math.random().toString(36).substring(2, 6).toUpperCase();
-      codes.push(`${part1}-${part2}`);
-    }
-    return codes;
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sin caracteres ambiguos
+    const randomPart = (len: number) =>
+      Array.from({ length: len }, () => alphabet[randomInt(0, alphabet.length)]).join('');
+    return Array.from({ length: 8 }, () => `${randomPart(4)}-${randomPart(4)}`);
   }
 
   private buildUsuarioPayload(usuario: Usuario, isRoot: boolean) {

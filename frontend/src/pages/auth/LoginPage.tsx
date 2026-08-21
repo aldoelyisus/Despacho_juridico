@@ -1,9 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Scale, Eye, EyeOff, Loader2, ShieldCheck, ArrowLeft } from 'lucide-react';
+import { Scale, Eye, EyeOff, Loader2, ShieldCheck, ArrowLeft, KeyRound } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { authApi } from '../../api/auth.api';
 import { useAuthStore } from '../../stores/authStore';
+import { evaluatePasswordPolicy } from '../../utils/password';
+import PasswordChecklist from '../../components/PasswordChecklist';
 import './AuthPages.css';
 
 // ── Componente OTP (6 cajas individuales) ────────────────────────────────────
@@ -76,26 +78,27 @@ export default function LoginPage() {
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Estado 2FA
-  const [step, setStep] = useState<'credentials' | '2fa'>('credentials');
+  // Estado 2FA / cambio de contraseña obligatorio
+  const [step, setStep] = useState<'credentials' | '2fa' | 'password-change'>('credentials');
   const [tempToken, setTempToken] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [newPasswordConfirm, setNewPasswordConfirm] = useState('');
+
+  // Si venimos de una sesión cortada por despacho bloqueado/desactivado, avisar
+  useEffect(() => {
+    const blockMessage = sessionStorage.getItem('auth_block_message');
+    if (blockMessage) {
+      toast.error(blockMessage, { duration: 6000 });
+      sessionStorage.removeItem('auth_block_message');
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
       const data = await authApi.login(form.email, form.password);
-
-      if (data.requires2FA) {
-        setTempToken(data.tempToken);
-        setStep('2fa');
-        return;
-      }
-
-      setAuth(data.accessToken, data.refreshToken, data.usuario);
-      const isRoot = data.usuario?.rol?.nombre?.toLowerCase() === 'root';
-      navigate(isRoot ? '/root' : '/dashboard');
-      toast.success(`¡Bienvenido, ${data.usuario.nombre}!`);
+      handleAuthStepResponse(data);
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Credenciales incorrectas');
     } finally {
@@ -103,16 +106,56 @@ export default function LoginPage() {
     }
   };
 
+  // Resuelve la respuesta de login/2FA/cambio de contraseña, que puede completar la sesión
+  // o encadenar al siguiente paso requerido (cambio de contraseña obligatorio o 2FA).
+  const handleAuthStepResponse = (data: any) => {
+    if (data.requiresPasswordChange) {
+      setTempToken(data.tempToken);
+      setNewPassword('');
+      setNewPasswordConfirm('');
+      setStep('password-change');
+      return;
+    }
+    if (data.requires2FA) {
+      setTempToken(data.tempToken);
+      setStep('2fa');
+      return;
+    }
+    setAuth(data.accessToken, data.refreshToken, data.usuario);
+    const isRoot = data.usuario?.rol?.nombre?.toLowerCase() === 'root';
+    navigate(isRoot ? '/root' : '/dashboard');
+    toast.success(`¡Bienvenido, ${data.usuario.nombre}!`);
+  };
+
   const handle2FA = async (code: string) => {
     setLoading(true);
     try {
       const data = await authApi.verify2FA(tempToken, code);
-      setAuth(data.accessToken, data.refreshToken, data.usuario);
-      const isRoot = data.usuario?.rol?.nombre?.toLowerCase() === 'root';
-      navigate(isRoot ? '/root' : '/dashboard');
-      toast.success(`¡Bienvenido, ${data.usuario.nombre}!`);
+      handleAuthStepResponse(data);
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Código incorrecto');
+      setLoading(false);
+    }
+  };
+
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword !== newPasswordConfirm) {
+      toast.error('Las contraseñas no coinciden');
+      return;
+    }
+    if (!evaluatePasswordPolicy(newPassword)) {
+      toast.error('La contraseña no cumple la política de seguridad');
+      return;
+    }
+    setLoading(true);
+    try {
+      const data = await authApi.changePasswordRequired(tempToken, newPassword);
+      toast.success('Contraseña actualizada');
+      handleAuthStepResponse(data);
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'No se pudo actualizar la contraseña');
+    } finally {
       setLoading(false);
     }
   };
@@ -181,6 +224,65 @@ export default function LoginPage() {
               >
                 {loading ? <Loader2 size={18} className="spinning" /> : null}
                 {loading ? 'Verificando...' : 'Iniciar Sesión'}
+              </button>
+            </form>
+          </>
+        )}
+
+        {/* ── PASO INTERMEDIO: Cambio de contraseña obligatorio ── */}
+        {step === 'password-change' && (
+          <>
+            <div className="auth-logo">
+              <div className="auth-logo-icon" style={{ background: 'rgba(245,158,11,0.15)' }}>
+                <KeyRound size={28} style={{ color: '#f59e0b' }} />
+              </div>
+            </div>
+            <h1 className="auth-title">Debes fijar una nueva contraseña</h1>
+            <p className="auth-subtitle" style={{ marginBottom: 'var(--sp-5)' }}>
+              Por seguridad, define tu contraseña definitiva antes de continuar.
+            </p>
+
+            <form onSubmit={handlePasswordChange} className="auth-form">
+              <div className="form-group">
+                <label className="form-label">Nueva contraseña</label>
+                <input
+                  type="password"
+                  className="form-input"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  required
+                  autoFocus
+                />
+                <PasswordChecklist password={newPassword} />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Confirmar contraseña</label>
+                <input
+                  type="password"
+                  className="form-input"
+                  value={newPasswordConfirm}
+                  onChange={(e) => setNewPasswordConfirm(e.target.value)}
+                  required
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="btn btn-primary w-full btn-lg"
+                disabled={loading || !evaluatePasswordPolicy(newPassword) || newPassword !== newPasswordConfirm}
+              >
+                {loading ? <Loader2 size={18} className="spinning" /> : null}
+                {loading ? 'Guardando...' : 'Guardar y continuar'}
+              </button>
+
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                style={{ width: '100%', marginTop: 'var(--sp-2)' }}
+                onClick={() => { setStep('credentials'); setTempToken(''); }}
+              >
+                <ArrowLeft size={14} /> Volver al inicio de sesión
               </button>
             </form>
           </>

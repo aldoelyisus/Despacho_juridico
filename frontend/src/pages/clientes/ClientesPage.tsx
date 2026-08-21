@@ -5,6 +5,8 @@ import { Plus, Search, Eye, Edit, Trash2, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { clientesApi } from '../../api/clientes.api';
 import ClienteModal from './ClienteModal';
+import Pagination from '../../components/Pagination';
+import { getErrorMessage } from '../../utils/errors';
 
 export default function ClientesPage() {
   const navigate = useNavigate();
@@ -30,6 +32,7 @@ export default function ClientesPage() {
       qc.invalidateQueries({ queryKey: ['clientes'] });
       toast.success('Cliente desactivado');
     },
+    onError: (err: any) => toast.error(getErrorMessage(err, 'Error al desactivar el cliente')),
   });
 
   const handleEdit = (cliente: any) => { setEditCliente(cliente); setModalOpen(true); };
@@ -134,32 +137,15 @@ export default function ClientesPage() {
         </table>
       </div>
 
-      {/* Pagination */}
-      {data && data.totalPaginas > 1 && (() => {
-        const total = data.totalPaginas;
-        const delta = 2; // páginas a cada lado de la actual
-        const pages: (number | '...')[] = [];
-        for (let i = 1; i <= total; i++) {
-          if (i === 1 || i === total || (i >= pagina - delta && i <= pagina + delta)) {
-            pages.push(i);
-          } else if (pages[pages.length - 1] !== '...') {
-            pages.push('...');
-          }
-        }
-        return (
-          <div className="pagination">
-            <button className="page-btn" disabled={pagina === 1} onClick={() => setPagina(p => p - 1)}>‹</button>
-            {pages.map((p, i) =>
-              p === '...' ? (
-                <span key={`ellipsis-${i}`} style={{ padding: '0 4px', color: 'var(--text-muted)', alignSelf: 'center' }}>…</span>
-              ) : (
-                <button key={p} className={`page-btn ${pagina === p ? 'active' : ''}`} onClick={() => setPagina(p as number)}>{p}</button>
-              )
-            )}
-            <button className="page-btn" disabled={pagina === total} onClick={() => setPagina(p => p + 1)}>›</button>
-          </div>
-        );
-      })()}
+      {data && (
+        <Pagination
+          pagina={pagina}
+          totalPaginas={data.totalPaginas}
+          total={data.total}
+          limite={data.limite}
+          onChange={setPagina}
+        />
+      )}
 
       {modalOpen && (
         <ClienteModal

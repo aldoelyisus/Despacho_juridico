@@ -1,23 +1,27 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Plus, Lock, Unlock, Users, Eye, X, Loader2,
-  Building2, ChevronDown, ChevronUp,
+  Plus, Lock, Unlock, Users, X, Loader2,
+  Building2, Pencil, KeyRound,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { rootApi } from '../../api/root.api';
+import { planesApi } from '../../api/planes.api';
+import { formatFecha } from '../../utils/date';
 
 // ── Modal nuevo despacho ───────────────────────────────────────────────────
 function NuevoDespachoModal({ onClose, onSuccess }: any) {
   const [form, setForm] = useState({
     nombre: '', nombreComercial: '', email: '', telefono: '', ciudad: '', estado: '',
-    planMensual: '', fechaVencimientoPago: '',
+    planId: '', planMensual: '', fechaVencimientoPago: '',
     nombreAdmin: '', apellidoAdmin: '', emailAdmin: '', passwordAdmin: '',
   });
   const set = (f: string) => (e: any) => setForm(p => ({ ...p, [f]: e.target.value }));
 
+  const { data: planes } = useQuery({ queryKey: ['root-planes'], queryFn: planesApi.list });
+
   const mutation = useMutation({
-    mutationFn: rootApi.createDespacho,
+    mutationFn: (data: any) => rootApi.createDespacho({ ...data, planId: data.planId ? +data.planId : undefined }),
     onSuccess: (data) => {
       toast.success(`Despacho creado. Admin: ${data.usuario.email}`);
       onSuccess();
@@ -55,7 +59,18 @@ function NuevoDespachoModal({ onClose, onSuccess }: any) {
                 <input className="form-input" value={form.telefono} onChange={set('telefono')} />
               </div>
               <div className="form-group">
-                <label className="form-label">Plan mensual ($)</label>
+                <label className="form-label">Plan</label>
+                <select className="form-select" value={form.planId} onChange={set('planId')}>
+                  <option value="">Sin plan / personalizado</option>
+                  {planes?.map((p: any) => (
+                    <option key={p.id} value={p.id}>
+                      {p.nombre} — ${Number(p.costoMensualidad).toLocaleString('es-MX')} · {p.numeroUsuarios} usuarios
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Plan mensual ($) {form.planId && '(sobreescribe costo del plan)'}</label>
                 <input className="form-input" type="number" step="0.01" value={form.planMensual} onChange={set('planMensual')} />
               </div>
               <div className="form-group">
@@ -98,6 +113,168 @@ function NuevoDespachoModal({ onClose, onSuccess }: any) {
   );
 }
 
+// ── Modal editar despacho ──────────────────────────────────────────────────
+function EditarDespachoModal({ despacho, onClose, onSuccess }: any) {
+  const [form, setForm] = useState({
+    nombre: despacho.nombre || '',
+    nombreComercial: despacho.nombreComercial || '',
+    email: despacho.email || '',
+    telefono: despacho.telefono || '',
+    ciudad: despacho.ciudad || '',
+    estado: despacho.estado || '',
+    rfc: despacho.rfc || '',
+    direccion: despacho.direccion || '',
+    sitioWeb: despacho.sitioWeb || '',
+    planId: despacho.planId || '',
+    planMensual: despacho.planMensual || '',
+    fechaVencimientoPago: despacho.fechaVencimientoPago ? despacho.fechaVencimientoPago.split('T')[0] : '',
+    activo: despacho.activo,
+  });
+  const set = (f: string) => (e: any) => setForm(p => ({ ...p, [f]: e.target.value }));
+
+  const { data: planes } = useQuery({ queryKey: ['root-planes'], queryFn: planesApi.list });
+
+  const mutation = useMutation({
+    mutationFn: (data: any) => rootApi.updateDespacho(despacho.id, { ...data, planId: data.planId ? +data.planId : null }),
+    onSuccess: () => { toast.success('Despacho actualizado'); onSuccess(); },
+    onError: (e: any) => toast.error(e.response?.data?.message || 'Error al actualizar despacho'),
+  });
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal modal-lg">
+        <div className="modal-header">
+          <h3>Editar Despacho</h3>
+          <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={18} /></button>
+        </div>
+        <form onSubmit={e => { e.preventDefault(); mutation.mutate(form); }}>
+          <div className="modal-body">
+            <div className="form-grid-2">
+              <div className="form-group">
+                <label className="form-label">Nombre *</label>
+                <input className="form-input" required value={form.nombre} onChange={set('nombre')} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Nombre Comercial</label>
+                <input className="form-input" value={form.nombreComercial} onChange={set('nombreComercial')} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Email del despacho</label>
+                <input className="form-input" type="email" value={form.email} onChange={set('email')} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Teléfono</label>
+                <input className="form-input" value={form.telefono} onChange={set('telefono')} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Ciudad</label>
+                <input className="form-input" value={form.ciudad} onChange={set('ciudad')} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Estado</label>
+                <input className="form-input" value={form.estado} onChange={set('estado')} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">RFC</label>
+                <input className="form-input" value={form.rfc} onChange={set('rfc')} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Sitio web</label>
+                <input className="form-input" value={form.sitioWeb} onChange={set('sitioWeb')} />
+              </div>
+              <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                <label className="form-label">Dirección</label>
+                <input className="form-input" value={form.direccion} onChange={set('direccion')} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Plan</label>
+                <select className="form-select" value={form.planId} onChange={set('planId')}>
+                  <option value="">Sin plan / personalizado</option>
+                  {planes?.map((p: any) => (
+                    <option key={p.id} value={p.id}>
+                      {p.nombre} — ${Number(p.costoMensualidad).toLocaleString('es-MX')} · {p.numeroUsuarios} usuarios
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Plan mensual ($) {form.planId && '(sobreescribe costo del plan)'}</label>
+                <input className="form-input" type="number" step="0.01" value={form.planMensual} onChange={set('planMensual')} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Próximo vencimiento</label>
+                <input className="form-input" type="date" value={form.fechaVencimientoPago} onChange={set('fechaVencimientoPago')} />
+              </div>
+              <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input type="checkbox" checked={form.activo} onChange={e => setForm(p => ({ ...p, activo: e.target.checked }))} />
+                <label className="form-label" style={{ margin: 0 }}>Despacho activo</label>
+              </div>
+            </div>
+          </div>
+          <div className="modal-footer">
+            <button type="button" className="btn btn-secondary" onClick={onClose}>Cancelar</button>
+            <button type="submit" className="btn btn-primary" disabled={mutation.isPending}>
+              {mutation.isPending && <Loader2 size={16} className="spinning" />} Guardar Cambios
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ── Modal cambiar contraseña de usuario ────────────────────────────────────
+function CambiarPasswordModal({ usuario, onClose, onSuccess }: any) {
+  const [password, setPassword] = useState('');
+  const [confirmar, setConfirmar] = useState('');
+
+  const mutation = useMutation({
+    mutationFn: () => rootApi.resetPasswordUsuario(usuario.id, password),
+    onSuccess: () => { toast.success('Contraseña actualizada'); onSuccess(); },
+    onError: (e: any) => toast.error(e.response?.data?.message || 'Error al cambiar la contraseña'),
+  });
+
+  const handleSubmit = (e: any) => {
+    e.preventDefault();
+    if (password !== confirmar) { toast.error('Las contraseñas no coinciden'); return; }
+    mutation.mutate();
+  };
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal">
+        <div className="modal-header">
+          <h3><KeyRound size={16} style={{ display: 'inline', marginRight: 6 }} />Cambiar Contraseña</h3>
+          <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={18} /></button>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <div className="modal-body">
+            <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: 'var(--sp-3)' }}>
+              {usuario.nombre} {usuario.apellido} · {usuario.email}
+            </p>
+            <div className="form-group">
+              <label className="form-label">Nueva contraseña *</label>
+              <input className="form-input" type="password" required minLength={6}
+                value={password} onChange={e => setPassword(e.target.value)} autoFocus />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Confirmar contraseña *</label>
+              <input className="form-input" type="password" required minLength={6}
+                value={confirmar} onChange={e => setConfirmar(e.target.value)} />
+            </div>
+          </div>
+          <div className="modal-footer">
+            <button type="button" className="btn btn-secondary" onClick={onClose}>Cancelar</button>
+            <button type="submit" className="btn btn-primary" disabled={mutation.isPending}>
+              {mutation.isPending && <Loader2 size={16} className="spinning" />} Cambiar Contraseña
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ── Panel de usuarios del despacho ────────────────────────────────────────
 function UsuariosPanel({ despachoId, onClose }: any) {
   const { data: usuarios, refetch } = useQuery({
@@ -108,6 +285,7 @@ function UsuariosPanel({ despachoId, onClose }: any) {
     mutationFn: rootApi.toggleUsuario,
     onSuccess: () => { refetch(); toast.success('Usuario actualizado'); },
   });
+  const [passwordUsuario, setPasswordUsuario] = useState<any>(null);
 
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
@@ -131,6 +309,10 @@ function UsuariosPanel({ despachoId, onClose }: any) {
                 <span className={`badge ${u.activo ? 'badge-success' : 'badge-muted'}`}>
                   {u.activo ? 'Activo' : 'Inactivo'}
                 </span>
+                <button className="btn btn-ghost btn-icon btn-icon-sm" onClick={() => setPasswordUsuario(u)}
+                  data-tooltip="Cambiar contraseña">
+                  <KeyRound size={15} />
+                </button>
                 <button className={`btn btn-sm ${u.activo ? 'btn-secondary' : 'btn-primary'}`}
                   onClick={() => toggleM.mutate(u.id)} disabled={toggleM.isPending}>
                   {u.activo ? 'Desactivar' : 'Activar'}
@@ -143,6 +325,13 @@ function UsuariosPanel({ despachoId, onClose }: any) {
           <button className="btn btn-secondary" onClick={onClose}>Cerrar</button>
         </div>
       </div>
+      {passwordUsuario && (
+        <CambiarPasswordModal
+          usuario={passwordUsuario}
+          onClose={() => setPasswordUsuario(null)}
+          onSuccess={() => setPasswordUsuario(null)}
+        />
+      )}
     </div>
   );
 }
@@ -151,6 +340,7 @@ function UsuariosPanel({ despachoId, onClose }: any) {
 export default function RootDespachosPage() {
   const qc = useQueryClient();
   const [showModal, setShowModal] = useState(false);
+  const [editDespacho, setEditDespacho] = useState<any>(null);
   const [usuariosPanel, setUsuariosPanel] = useState<number | null>(null);
 
   const { data: despachos, isLoading } = useQuery({
@@ -162,7 +352,7 @@ export default function RootDespachosPage() {
     mutationFn: rootApi.toggleBloqueo,
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['root-despachos'] });
-      toast.success(data.bloqueado ? '🔒 Despacho bloqueado' : '🔓 Despacho desbloqueado');
+      toast.success(data.bloqueado ? 'Despacho bloqueado' : 'Despacho desbloqueado');
     },
     onError: () => toast.error('Error al cambiar estado'),
   });
@@ -186,6 +376,7 @@ export default function RootDespachosPage() {
               <tr>
                 <th>Despacho</th>
                 <th>Contacto</th>
+                <th>Plan</th>
                 <th>Plan Mensual</th>
                 <th>Vencimiento</th>
                 <th>Usuarios</th>
@@ -195,7 +386,7 @@ export default function RootDespachosPage() {
             </thead>
             <tbody>
               {isLoading && (
-                <tr><td colSpan={7} style={{ textAlign: 'center', padding: 'var(--sp-8)' }}><div className="spinner" /></td></tr>
+                <tr><td colSpan={8} style={{ textAlign: 'center', padding: 'var(--sp-8)' }}><div className="spinner" /></td></tr>
               )}
               {despachos?.map((d: any) => (
                 <tr key={d.id}>
@@ -207,6 +398,11 @@ export default function RootDespachosPage() {
                     <div>{d.email || '—'}</div>
                     <div style={{ color: 'var(--text-muted)' }}>{d.telefono || ''}</div>
                   </td>
+                  <td style={{ fontSize: '0.82rem' }}>
+                    {d.plan
+                      ? <span className="badge badge-accent">{d.plan.nombre}</span>
+                      : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                  </td>
                   <td style={{ fontWeight: 600, color: '#10b981' }}>
                     {d.planMensual > 0
                       ? `$${Number(d.planMensual).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`
@@ -214,7 +410,7 @@ export default function RootDespachosPage() {
                   </td>
                   <td style={{ fontSize: '0.82rem' }}>
                     {d.fechaVencimientoPago
-                      ? new Date(d.fechaVencimientoPago).toLocaleDateString('es-MX')
+                      ? formatFecha(d.fechaVencimientoPago)
                       : <span style={{ color: 'var(--text-muted)' }}>—</span>}
                   </td>
                   <td>
@@ -225,7 +421,7 @@ export default function RootDespachosPage() {
                   </td>
                   <td>
                     <span className={`badge ${!d.activo ? 'badge-muted' : d.bloqueado ? 'badge-danger' : 'badge-success'}`}>
-                      {!d.activo ? 'Desactivado' : d.bloqueado ? '🔒 Bloqueado' : '✅ Activo'}
+                      {!d.activo ? 'Desactivado' : d.bloqueado ? 'Bloqueado' : 'Activo'}
                     </span>
                     {d.proximaMensualidad && (
                       <div style={{ fontSize: '0.7rem', color: 'var(--warning)', marginTop: 2 }}>
@@ -235,6 +431,9 @@ export default function RootDespachosPage() {
                   </td>
                   <td>
                     <div style={{ display: 'flex', gap: 'var(--sp-2)' }}>
+                      <button className="btn btn-ghost btn-icon btn-icon-sm" onClick={() => setEditDespacho(d)} data-tooltip="Editar despacho">
+                        <Pencil size={15} />
+                      </button>
                       <button
                         className={`btn btn-sm ${d.bloqueado ? 'btn-primary' : 'btn-secondary'}`}
                         onClick={() => toggleBloqueoM.mutate(d.id)}
@@ -248,7 +447,7 @@ export default function RootDespachosPage() {
                 </tr>
               ))}
               {!isLoading && !despachos?.length && (
-                <tr><td colSpan={7}>
+                <tr><td colSpan={8}>
                   <div className="empty-state">
                     <div className="empty-icon"><Building2 size={40} /></div>
                     <h3>Sin despachos</h3>
@@ -270,6 +469,13 @@ export default function RootDespachosPage() {
       )}
       {usuariosPanel !== null && (
         <UsuariosPanel despachoId={usuariosPanel} onClose={() => setUsuariosPanel(null)} />
+      )}
+      {editDespacho && (
+        <EditarDespachoModal
+          despacho={editDespacho}
+          onClose={() => setEditDespacho(null)}
+          onSuccess={() => { setEditDespacho(null); qc.invalidateQueries({ queryKey: ['root-despachos'] }); }}
+        />
       )}
     </div>
   );

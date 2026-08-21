@@ -11,12 +11,14 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { Usuario } from '../usuarios/entities/usuario.entity';
 import { Despacho } from '../despachos/entities/despacho.entity';
 import { Rol } from '../usuarios/entities/rol.entity';
+import { AuditoriaModule } from '../auditoria/auditoria.module';
 
 @Module({
   imports: [
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.register({}),
     TypeOrmModule.forFeature([Usuario, Despacho, Rol]),
+    AuditoriaModule,
   ],
   controllers: [AuthController],
   providers: [

@@ -3,6 +3,18 @@ import { useMutation } from '@tanstack/react-query';
 import { X, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { clientesApi } from '../../api/clientes.api';
+import { getErrorMessage } from '../../utils/errors';
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Validación ligera en el cliente para dar feedback inmediato antes de llamar al backend */
+function validar(form: Record<string, string>): string | null {
+  if (!form.nombre.trim()) return 'El nombre es obligatorio';
+  if (!form.apellido.trim()) return 'El apellido es obligatorio';
+  if (!form.celular.trim()) return 'El celular es obligatorio';
+  if (form.email && !EMAIL_REGEX.test(form.email.trim())) return 'El email no tiene un formato válido';
+  return null;
+}
 
 interface Props {
   cliente?: any;
@@ -36,11 +48,13 @@ export default function ClienteModal({ cliente, onClose, onSuccess }: Props) {
       toast.success(isEdit ? 'Cliente actualizado' : 'Cliente registrado');
       onSuccess();
     },
-    onError: (err: any) => toast.error(err.response?.data?.message || 'Error al guardar'),
+    onError: (err: any) => toast.error(getErrorMessage(err, 'Error al guardar el cliente')),
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const error = validar(form);
+    if (error) { toast.error(error); return; }
     mutation.mutate(form);
   };
 

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Like } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { LogAuditoria } from './entities/log-auditoria.entity';
 
 @Injectable()
@@ -9,9 +9,10 @@ export class AuditoriaService {
     @InjectRepository(LogAuditoria) private repo: Repository<LogAuditoria>,
   ) {}
 
-  async findAll(despachoId: number, query: any = {}) {
+  /** despachoId null → logs de nivel sistema (panel Root) */
+  async findAll(despachoId: number | null, query: any = {}) {
     const { usuarioId, accion, modulo, pagina = 1, limite = 50 } = query;
-    const where: any = { despachoId };
+    const where: any = { despachoId: despachoId === null ? IsNull() : despachoId };
     if (usuarioId) where.usuarioId = +usuarioId;
     if (accion) where.accion = accion;
     if (modulo) where.modulo = modulo;

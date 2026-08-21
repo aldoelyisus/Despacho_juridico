@@ -16,6 +16,8 @@ import ConfiguracionPage from './pages/configuracion/ConfiguracionPage';
 import RootDashboardPage from './pages/root/RootDashboardPage';
 import RootDespachosPage from './pages/root/RootDespachosPage';
 import RootMensualidadesPage from './pages/root/RootMensualidadesPage';
+import RootPlanesPage from './pages/root/RootPlanesPage';
+import RootAuditoriaPage from './pages/root/RootAuditoriaPage';
 import PerfilPage from './pages/perfil/PerfilPage';
 import DescuentosPage from './pages/descuentos/DescuentosPage';
 
@@ -52,7 +54,9 @@ export default function App() {
         <Route index element={<Navigate to="/root/dashboard" replace />} />
         <Route path="dashboard"     element={<RootDashboardPage />} />
         <Route path="despachos"     element={<RootDespachosPage />} />
+        <Route path="planes"       element={<RootPlanesPage />} />
         <Route path="mensualidades" element={<RootMensualidadesPage />} />
+        <Route path="auditoria"     element={<RootAuditoriaPage />} />
         <Route path="perfil"        element={<PerfilPage />} />
       </Route>
 

@@ -1,4 +1,4 @@
-import { Menu, Bell } from 'lucide-react';
+import { Menu } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import './Header.css';
 
@@ -16,10 +16,6 @@ export default function Header({ onMenuToggle }: Props) {
       </button>
 
       <div className="header-right">
-        <button className="btn btn-ghost btn-icon" data-tooltip="Notificaciones">
-          <Bell size={20} />
-          <span className="header-badge">3</span>
-        </button>
         <div className="header-user">
           <div className="avatar avatar-sm">{usuario?.nombre?.[0]}{usuario?.apellido?.[0]}</div>
           <div className="header-user-info">

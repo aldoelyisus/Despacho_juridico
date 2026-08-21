@@ -6,6 +6,8 @@ import { ApiProperty } from '@nestjs/swagger';
 import { BaseEntity } from '../../common/entities/base.entity';
 import { Cliente } from '../../clientes/entities/cliente.entity';
 import { Usuario } from '../../usuarios/entities/usuario.entity';
+import { AreaDerecho } from '../../catalogos/entities/area-derecho.entity';
+import { Subarea } from '../../catalogos/entities/subarea.entity';
 import { Documento } from './documento.entity';
 import { Observacion } from './observacion.entity';
 import { EventoExpediente } from './evento-expediente.entity';
@@ -46,9 +48,13 @@ export class Expediente extends BaseEntity {
   @ApiProperty()
   subareaId: number;
 
-  @Column({ name: 'servicio_id', nullable: true })
-  @ApiProperty()
-  servicioId: number;
+  @ManyToOne(() => AreaDerecho, { nullable: true })
+  @JoinColumn({ name: 'area_id' })
+  area: AreaDerecho;
+
+  @ManyToOne(() => Subarea, { nullable: true })
+  @JoinColumn({ name: 'subarea_id' })
+  subarea: Subarea;
 
   @Column({
     type: 'enum',

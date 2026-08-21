@@ -1,6 +1,11 @@
-import { Entity, Column, OneToMany } from 'typeorm';
+import { Entity, Column, OneToMany, ManyToOne, JoinColumn } from 'typeorm';
 import { ApiProperty } from '@nestjs/swagger';
 import { BaseEntity } from '../../common/entities/base.entity';
+import { Cliente } from '../../clientes/entities/cliente.entity';
+import { Expediente } from '../../expedientes/entities/expediente.entity';
+import { Servicio } from '../../catalogos/entities/servicio.entity';
+import { Usuario } from '../../usuarios/entities/usuario.entity';
+import { Descuento } from '../../descuentos/entities/descuento.entity';
 import { PagoDetalle } from './pago-detalle.entity';
 
 export enum EstadoPago {
@@ -74,6 +79,26 @@ export class Pago extends BaseEntity {
   @Column({ type: 'text', nullable: true })
   @ApiProperty()
   notas: string;
+
+  @ManyToOne(() => Cliente)
+  @JoinColumn({ name: 'cliente_id' })
+  cliente: Cliente;
+
+  @ManyToOne(() => Expediente, { nullable: true })
+  @JoinColumn({ name: 'expediente_id' })
+  expediente: Expediente;
+
+  @ManyToOne(() => Servicio, { nullable: true })
+  @JoinColumn({ name: 'servicio_id' })
+  servicio: Servicio;
+
+  @ManyToOne(() => Usuario)
+  @JoinColumn({ name: 'usuario_id' })
+  usuario: Usuario;
+
+  @ManyToOne(() => Descuento, { nullable: true })
+  @JoinColumn({ name: 'descuento_id' })
+  descuento: Descuento;
 
   @OneToMany(() => PagoDetalle, (d) => d.pago, { cascade: true })
   detalles: PagoDetalle[];

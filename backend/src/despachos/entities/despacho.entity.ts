@@ -1,7 +1,8 @@
-import { Entity, Column, OneToMany, Index } from 'typeorm';
+import { Entity, Column, OneToMany, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { ApiProperty } from '@nestjs/swagger';
 import { BaseEntity } from '../../common/entities/base.entity';
 import { Usuario } from '../../usuarios/entities/usuario.entity';
+import { Plan } from '../../planes/entities/plan.entity';
 
 @Entity('despachos')
 export class Despacho extends BaseEntity {
@@ -61,6 +62,10 @@ export class Despacho extends BaseEntity {
   @ApiProperty({ description: 'Costo mensual del plan' })
   planMensual: number;
 
+  @Column({ name: 'plan_id', nullable: true })
+  @ApiProperty({ description: 'Plan de suscripción contratado' })
+  planId: number;
+
   @Column({ name: 'whatsapp_numero', length: 30, nullable: true })
   @ApiProperty({ description: 'Número para integración futura de WhatsApp' })
   whatsappNumero: string;
@@ -71,4 +76,8 @@ export class Despacho extends BaseEntity {
 
   @OneToMany(() => Usuario, (u) => u.despacho)
   usuarios: Usuario[];
+
+  @ManyToOne(() => Plan, { nullable: true })
+  @JoinColumn({ name: 'plan_id' })
+  plan: Plan;
 }

@@ -58,6 +58,32 @@ export class RootController {
     return this.service.toggleUsuario(id);
   }
 
+  @Patch('usuarios/:id/password')
+  @ApiOperation({ summary: 'Restablecer la contraseña de un usuario (ej: el usuario la olvidó)' })
+  resetPasswordUsuario(@Param('id', ParseIntPipe) id: number, @Body() dto: { password: string }) {
+    return this.service.resetPasswordUsuario(id, dto.password);
+  }
+
+  // ── AUDITORÍA ─────────────────────────────────────────────────────────────
+  @Get('auditoria')
+  @ApiOperation({ summary: 'Registro de actividad de nivel sistema (acciones del panel Root)' })
+  getAuditoriaSistema(@Query() query: any) {
+    return this.service.getAuditoriaSistema(query);
+  }
+
+  // ── PAGOS POR PERIODO ─────────────────────────────────────────────────────
+  @Get('despachos/:id/estado-pagos')
+  @ApiOperation({ summary: 'Último periodo pagado, periodos pendientes y siguiente periodo a facturar' })
+  getEstadoPagos(@Param('id', ParseIntPipe) id: number) {
+    return this.service.getEstadoPagos(id);
+  }
+
+  @Post('despachos/:id/pagos')
+  @ApiOperation({ summary: 'Registrar el pago de N periodos (salda pendientes existentes y genera los que falten)' })
+  pagarPeriodos(@Param('id', ParseIntPipe) id: number, @Body() dto: any) {
+    return this.service.pagarPeriodos(id, dto);
+  }
+
   // ── MENSUALIDADES ─────────────────────────────────────────────────────────
   @Get('mensualidades')
   @ApiOperation({ summary: 'Listar mensualidades (filtrable por despacho y estado)' })

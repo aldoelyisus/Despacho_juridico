@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import { expedientesApi } from '../../api/expedientes.api';
 import { clientesApi } from '../../api/clientes.api';
 import ExpedienteModal from './ExpedienteModal';
+import Pagination from '../../components/Pagination';
 
 const ESTADO_COLORS: Record<string, string> = {
   activo: 'badge-success', en_proceso: 'badge-info', cerrado: 'badge-muted',
@@ -161,14 +162,14 @@ export default function ExpedientesPage() {
         </table>
       </div>
 
-      {data && data.totalPaginas > 1 && (
-        <div className="pagination">
-          <button className="page-btn" disabled={pagina === 1} onClick={() => setPagina(p => p - 1)}>‹</button>
-          {Array.from({ length: Math.min(data.totalPaginas, 5) }, (_, i) => (
-            <button key={i + 1} className={`page-btn ${pagina === i + 1 ? 'active' : ''}`} onClick={() => setPagina(i + 1)}>{i + 1}</button>
-          ))}
-          <button className="page-btn" disabled={pagina === data.totalPaginas} onClick={() => setPagina(p => p + 1)}>›</button>
-        </div>
+      {data && (
+        <Pagination
+          pagina={pagina}
+          totalPaginas={data.totalPaginas}
+          total={data.total}
+          limite={data.limite}
+          onChange={setPagina}
+        />
       )}
 
       {modalOpen && (

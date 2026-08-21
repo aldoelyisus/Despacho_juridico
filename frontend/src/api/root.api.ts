@@ -13,10 +13,18 @@ export const rootApi = {
   // Usuarios de despacho
   usuariosDespacho: (id: number) => api.get(`/root/despachos/${id}/usuarios`).then(r => r.data),
   toggleUsuario: (id: number) => api.patch(`/root/usuarios/${id}/toggle`).then(r => r.data),
+  resetPasswordUsuario: (id: number, password: string) => api.patch(`/root/usuarios/${id}/password`, { password }).then(r => r.data),
 
   // Mensualidades
   mensualidades: (params?: any) => api.get('/root/mensualidades', { params }).then(r => r.data),
   createMensualidad: (data: any) => api.post('/root/mensualidades', data).then(r => r.data),
   updateMensualidad: (id: number, data: any) => api.patch(`/root/mensualidades/${id}`, data).then(r => r.data),
   deleteMensualidad: (id: number) => api.delete(`/root/mensualidades/${id}`).then(r => r.data),
+
+  // Pagos por periodo
+  estadoPagos: (despachoId: number) => api.get(`/root/despachos/${despachoId}/estado-pagos`).then(r => r.data),
+  pagarPeriodos: (despachoId: number, data: any) => api.post(`/root/despachos/${despachoId}/pagos`, data).then(r => r.data),
+
+  // Auditoría de nivel sistema
+  auditoria: (params?: any) => api.get('/root/auditoria', { params }).then(r => r.data),
 };

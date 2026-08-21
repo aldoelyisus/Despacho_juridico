@@ -56,6 +56,18 @@ export class Usuario extends BaseEntity {
   @Column({ name: 'two_factor_backup_codes', type: 'json', nullable: true })
   twoFactorBackupCodes: string[];
 
+  @Column({ name: 'debe_cambiar_password', default: false })
+  @ApiProperty({ description: 'Si es true, el usuario debe fijar una nueva contraseña antes de continuar' })
+  debeCambiarPassword: boolean;
+
+  @Column({ name: 'intentos_fallidos', default: 0 })
+  @Exclude()
+  intentosFallidos: number;
+
+  @Column({ name: 'bloqueado_hasta', nullable: true })
+  @Exclude()
+  bloqueadoHasta: Date;
+
   @ManyToOne(() => Despacho, (d) => d.usuarios)
   @JoinColumn({ name: 'despacho_id' })
   despacho: Despacho;

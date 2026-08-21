@@ -8,13 +8,13 @@ export class LogAuditoria {
   @ApiProperty()
   id: number;
 
-  @Column({ name: 'despacho_id' })
-  @ApiProperty()
-  despachoId: number;
+  @Column({ name: 'despacho_id', type: 'int', nullable: true })
+  @ApiProperty({ description: 'Null para acciones de nivel sistema (panel Root)' })
+  despachoId: number | null;
 
-  @Column({ name: 'usuario_id', nullable: true })
+  @Column({ name: 'usuario_id', type: 'int', nullable: true })
   @ApiProperty()
-  usuarioId: number;
+  usuarioId: number | null;
 
   @Column({ name: 'usuario_nombre', length: 200, nullable: true })
   @ApiProperty()

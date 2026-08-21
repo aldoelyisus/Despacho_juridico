@@ -1,12 +1,12 @@
 import api from './axios';
 
 export const catalogosApi = {
-  areas: () => api.get('/catalogos/areas').then((r) => r.data),
+  areas: (params?: any) => api.get('/catalogos/areas', { params }).then((r) => r.data),
   createArea: (data: any) => api.post('/catalogos/areas', data).then((r) => r.data),
   updateArea: (id: number, data: any) => api.patch(`/catalogos/areas/${id}`, data).then((r) => r.data),
   deleteArea: (id: number) => api.delete(`/catalogos/areas/${id}`).then((r) => r.data),
 
-  subareas: () => api.get('/catalogos/subareas').then((r) => r.data),
+  subareas: (params?: any) => api.get('/catalogos/subareas', { params }).then((r) => r.data),
   createSubarea: (data: any) => api.post('/catalogos/subareas', data).then((r) => r.data),
   updateSubarea: (id: number, data: any) => api.patch(`/catalogos/subareas/${id}`, data).then((r) => r.data),
   deleteSubarea: (id: number) => api.delete(`/catalogos/subareas/${id}`).then((r) => r.data),

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { Expediente, EstadoExpediente } from './entities/expediente.entity';
@@ -7,6 +7,12 @@ import { Observacion } from './entities/observacion.entity';
 import { EventoExpediente } from './entities/evento-expediente.entity';
 import { Cliente } from '../clientes/entities/cliente.entity';
 import { Usuario } from '../usuarios/entities/usuario.entity';
+import { CreateExpedienteDto } from './dto/create-expediente.dto';
+import { UpdateExpedienteDto } from './dto/update-expediente.dto';
+import { CreateDocumentoDto } from './dto/create-documento.dto';
+import { CreateEventoDto } from './dto/create-evento.dto';
+
+const LIMITE_MAXIMO = 100;
 
 @Injectable()
 export class ExpedientesService {
@@ -25,7 +31,9 @@ export class ExpedientesService {
 
   async findAll(user: any, query: any = {}) {
     const { despachoId, id: usuarioId } = user;
-    const { estado, areaId, busqueda, clienteId, pagina = 1, limite = 20 } = query;
+    const { estado, areaId, busqueda, clienteId } = query;
+    const pagina = Math.max(1, Number(query.pagina) || 1);
+    const limite = Math.min(LIMITE_MAXIMO, Math.max(1, Number(query.limite) || 20));
 
     const qb = this.repo
       .createQueryBuilder('e')
@@ -45,11 +53,11 @@ export class ExpedientesService {
 
     const [items, total] = await qb
       .orderBy('e.createdAt', 'DESC')
-      .take(+limite)
-      .skip((+pagina - 1) * +limite)
+      .take(limite)
+      .skip((pagina - 1) * limite)
       .getManyAndCount();
 
-    return { items, total, pagina: +pagina, totalPaginas: Math.ceil(total / +limite) };
+    return { items, total, pagina, limite, totalPaginas: Math.ceil(total / limite) };
   }
 
   async findOne(id: number, user: any) {
@@ -61,6 +69,8 @@ export class ExpedientesService {
       .leftJoinAndSelect('e.documentos', 'doc')
       .leftJoinAndSelect('e.observaciones', 'obs')
       .leftJoinAndSelect('e.eventosExpediente', 'ev')
+      .leftJoinAndSelect('e.area', 'ar')
+      .leftJoinAndSelect('e.subarea', 'sa')
       .where('e.id = :id AND e.despachoId = :despachoId', { id, despachoId });
 
     // Restricción por rol
@@ -73,72 +83,80 @@ export class ExpedientesService {
     return e;
   }
 
-  async create(dto: any, despachoId: number) {
-    const { montoTotal: _ignored, clienteIds, colaboradorIds, ...rest } = dto;
+  async create(dto: CreateExpedienteDto, despachoId: number) {
+    if (!dto.clienteIds?.length) {
+      throw new BadRequestException('Debes asociar al menos un cliente al expediente');
+    }
+    const { clienteIds, colaboradorIds, ...rest } = dto;
     const count = await this.repo.count({ where: { despachoId } });
     const year = new Date().getFullYear();
     const numero = `EXP-${year}-${String(count + 1).padStart(4, '0')}`;
     const exp = Object.assign(new Expediente(), { ...rest, despachoId, numero, montoTotal: 0 });
 
-    if (clienteIds?.length) {
-      exp.clientes = await this.clienteRepo.findBy({ id: In(clienteIds) });
-    }
+    exp.clientes = (await this.resolveClientes(clienteIds, despachoId))!;
     if (colaboradorIds?.length) {
-      exp.colaboradores = await this.usuarioRepo.findBy({ id: In(colaboradorIds) });
+      exp.colaboradores = (await this.resolveColaboradores(colaboradorIds, despachoId))!;
     }
     return this.repo.save(exp);
   }
 
-  async update(id: number, dto: any, despachoId: number) {
-    const exp = await this.findOne(id, despachoId);
+  async update(id: number, dto: UpdateExpedienteDto, user: any) {
+    const exp = await this.findOne(id, user);
     const { clienteIds, colaboradorIds, ...rest } = dto;
     Object.assign(exp, rest);
 
-    if (clienteIds !== undefined) {
-      exp.clientes = clienteIds.length
-        ? await this.clienteRepo.findBy({ id: In(clienteIds) })
-        : [];
-    }
-    if (colaboradorIds !== undefined) {
-      exp.colaboradores = colaboradorIds.length
-        ? await this.usuarioRepo.findBy({ id: In(colaboradorIds) })
-        : [];
-    }
+    const clientes = await this.resolveClientes(clienteIds, user.despachoId);
+    if (clientes !== undefined) exp.clientes = clientes;
+
+    const colaboradores = await this.resolveColaboradores(colaboradorIds, user.despachoId);
+    if (colaboradores !== undefined) exp.colaboradores = colaboradores;
+
     return this.repo.save(exp);
   }
 
-  async cambiarEstado(id: number, estado: EstadoExpediente, despachoId: number) {
-    await this.repo.update({ id, despachoId }, { estado });
-    return this.findOne(id, despachoId);
+  async cambiarEstado(id: number, estado: EstadoExpediente, user: any) {
+    await this.findOne(id, user);
+    await this.repo.update({ id, despachoId: user.despachoId }, { estado });
+    return this.findOne(id, user);
   }
 
-  async addDocumento(expedienteId: number, file: Express.Multer.File, data: any, despachoId: number, usuarioId: number) {
+  async addDocumento(expedienteId: number, file: Express.Multer.File, dto: CreateDocumentoDto, user: any) {
+    if (!file) throw new BadRequestException('Debes seleccionar un archivo para subir');
+    await this.findOne(expedienteId, user);
+
     const doc = this.docRepo.create({
       expedienteId,
-      despachoId,
-      usuarioId,
-      nombre: data.nombre || file.originalname,
+      despachoId: user.despachoId,
+      usuarioId: user.id,
+      nombre: dto.nombre || file.originalname,
       ruta: `/uploads/${file.filename}`,
       tipo: file.mimetype,
       tamanoBytes: file.size,
-      descripcion: data.descripcion,
+      descripcion: dto.descripcion,
     });
     return this.docRepo.save(doc);
   }
 
-  async addObservacion(expedienteId: number, contenido: string, usuario: any, despachoId: number) {
+  async addObservacion(expedienteId: number, contenido: string, user: any) {
+    await this.findOne(expedienteId, user);
+
     const obs = this.obsRepo.create({
       expedienteId,
-      despachoId,
-      usuarioId: usuario.id,
-      usuarioNombre: `${usuario.nombre} ${usuario.apellido}`,
+      despachoId: user.despachoId,
+      usuarioId: user.id,
+      usuarioNombre: `${user.nombre} ${user.apellido}`,
       contenido,
     });
     return this.obsRepo.save(obs);
   }
 
-  async addEvento(expedienteId: number, dto: any, despachoId: number) {
-    const evento = this.eventoRepo.create({ ...dto, expedienteId, despachoId });
+  async addEvento(expedienteId: number, dto: CreateEventoDto, user: any) {
+    if (dto.fechaFin && new Date(dto.fechaFin) < new Date(dto.fechaInicio)) {
+      throw new BadRequestException('La fecha de fin no puede ser anterior a la fecha de inicio');
+    }
+    await this.findOne(expedienteId, user);
+
+    const evento = this.eventoRepo.create({ ...dto, expedienteId, despachoId: user.despachoId });
     return this.eventoRepo.save(evento);
   }
 
@@ -165,5 +183,25 @@ export class ExpedientesService {
     );
     const tasaExito = cerrados > 0 ? Math.round((ganados / cerrados) * 100) : 0;
     return { byStatus, tasaExito };
+  }
+
+  private async resolveClientes(clienteIds: number[] | undefined, despachoId: number): Promise<Cliente[] | undefined> {
+    if (clienteIds === undefined) return undefined;
+    if (!clienteIds.length) return [];
+    const clientes = await this.clienteRepo.findBy({ id: In(clienteIds), despachoId });
+    if (clientes.length !== new Set(clienteIds).size) {
+      throw new BadRequestException('Uno o más clientes seleccionados no existen en tu despacho');
+    }
+    return clientes;
+  }
+
+  private async resolveColaboradores(colaboradorIds: number[] | undefined, despachoId: number): Promise<Usuario[] | undefined> {
+    if (colaboradorIds === undefined) return undefined;
+    if (!colaboradorIds.length) return [];
+    const usuarios = await this.usuarioRepo.findBy({ id: In(colaboradorIds), despachoId });
+    if (usuarios.length !== new Set(colaboradorIds).size) {
+      throw new BadRequestException('Uno o más colaboradores seleccionados no existen en tu despacho');
+    }
+    return usuarios;
   }
 }

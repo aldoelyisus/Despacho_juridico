@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Activity } from 'lucide-react';
 import { auditoriaApi } from '../../api/auditoria.api';
+import Pagination from '../../components/Pagination';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -9,6 +10,7 @@ const ACCION_COLORS: Record<string, string> = {
   CREAR: 'badge-success',
   ACTUALIZAR: 'badge-info',
   ELIMINAR: 'badge-danger',
+  BUSCAR: 'badge-info',
 };
 
 export default function AuditoriaPage() {
@@ -45,7 +47,7 @@ export default function AuditoriaPage() {
             onChange={(e) => { setAccionFilter(e.target.value); setPagina(1); }}
           >
             <option value="">Todas las acciones</option>
-            {['CREAR', 'ACTUALIZAR', 'ELIMINAR'].map(a => (
+            {['CREAR', 'ACTUALIZAR', 'ELIMINAR', 'BUSCAR'].map(a => (
               <option key={a} value={a}>{a}</option>
             ))}
           </select>
@@ -130,16 +132,14 @@ export default function AuditoriaPage() {
         </table>
       </div>
 
-      {data && data.totalPaginas > 1 && (
-        <div className="pagination">
-          <button className="page-btn" disabled={pagina === 1} onClick={() => setPagina(p => p - 1)}>‹</button>
-          {Array.from({ length: Math.min(data.totalPaginas, 7) }, (_, i) => (
-            <button key={i + 1} className={`page-btn ${pagina === i + 1 ? 'active' : ''}`} onClick={() => setPagina(i + 1)}>
-              {i + 1}
-            </button>
-          ))}
-          <button className="page-btn" disabled={pagina === data.totalPaginas} onClick={() => setPagina(p => p + 1)}>›</button>
-        </div>
+      {data && (
+        <Pagination
+          pagina={pagina}
+          totalPaginas={data.totalPaginas}
+          total={data.total}
+          limite={50}
+          onChange={setPagina}
+        />
       )}
     </div>
   );

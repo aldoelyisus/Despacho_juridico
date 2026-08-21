@@ -8,6 +8,11 @@ export enum EstadoMensualidad {
   VENCIDO  = 'vencido',
 }
 
+export enum TipoMensualidad {
+  PLAN = 'plan',
+  USUARIO_EXTRA = 'usuario_extra',
+}
+
 @Entity('mensualidades')
 @Index(['despachoId', 'fechaVencimiento'])
 export class Mensualidad extends BaseEntity {
@@ -34,6 +39,26 @@ export class Mensualidad extends BaseEntity {
   })
   @ApiProperty({ enum: EstadoMensualidad })
   estado: EstadoMensualidad;
+
+  @Column({
+    type: 'enum',
+    enum: TipoMensualidad,
+    default: TipoMensualidad.PLAN,
+  })
+  @ApiProperty({ enum: TipoMensualidad, description: 'Cargo de plan mensual u cargo por usuario extra' })
+  tipo: TipoMensualidad;
+
+  @Column({ name: 'usuario_id', nullable: true })
+  @ApiProperty({ description: 'Usuario que originó el cargo (solo para tipo usuario_extra)' })
+  usuarioId: number;
+
+  @Column({ name: 'periodo_mes', type: 'tinyint', nullable: true })
+  @ApiProperty({ description: 'Mes (1-12) del periodo facturado, para evitar cobros duplicados' })
+  periodoMes: number;
+
+  @Column({ name: 'periodo_anio', type: 'smallint', nullable: true })
+  @ApiProperty({ description: 'Año del periodo facturado' })
+  periodoAnio: number;
 
   @Column({ name: 'metodo_pago', length: 100, nullable: true })
   @ApiProperty()

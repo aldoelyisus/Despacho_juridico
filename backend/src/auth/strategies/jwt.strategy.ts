@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ForbiddenException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
@@ -26,6 +26,23 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       relations: { rol: true, despacho: true },
     });
     if (!usuario) throw new UnauthorizedException('Usuario no encontrado');
+
+    const isRoot = usuario.rol?.nombre?.toLowerCase() === 'root';
+    if (!isRoot && usuario.despacho) {
+      if (!usuario.despacho.activo) {
+        throw new ForbiddenException({
+          code: 'DESPACHO_DESACTIVADO',
+          message: 'El despacho está desactivado',
+        });
+      }
+      if (usuario.despacho.bloqueado) {
+        throw new ForbiddenException({
+          code: 'DESPACHO_BLOQUEADO',
+          message: 'El acceso de tu despacho está suspendido por falta de pago. Contacta al administrador del sistema.',
+        });
+      }
+    }
+
     return {
       id: usuario.id,
       email: usuario.email,

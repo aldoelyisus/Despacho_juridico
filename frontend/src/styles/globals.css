@@ -733,3 +733,20 @@ h6 { font-size: 0.875rem; }
   h1 { font-size: 1.5rem; }
   .btn { font-size: 0.8125rem; }
 }
+
+/* ── IMPRESIÓN DE RECIBOS/TICKETS ──────────────────────────────
+   Al imprimir, solo se muestra el contenido marcado como área
+   imprimible (el recibo); el resto de la app (sidebar, header,
+   overlay del modal, botones) se oculta. */
+@media print {
+  body * { visibility: hidden; }
+  .recibo-print-area, .recibo-print-area * { visibility: visible; }
+  .recibo-print-area {
+    position: absolute;
+    top: 0; left: 50%;
+    transform: translateX(-50%);
+    width: 320px;
+    box-shadow: none !important;
+  }
+  .no-print { display: none !important; }
+}

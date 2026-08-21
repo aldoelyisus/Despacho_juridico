@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ScheduleModule } from '@nestjs/schedule';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { AuthModule } from './auth/auth.module';
 import { DespachosModule } from './despachos/despachos.module';
@@ -14,11 +15,14 @@ import { DashboardModule } from './dashboard/dashboard.module';
 import { AuditoriaModule } from './auditoria/auditoria.module';
 import { RootModule } from './root/root.module';
 import { DescuentosModule } from './descuentos/descuentos.module';
+import { PlanesModule } from './planes/planes.module';
+import { FacturacionModule } from './facturacion/facturacion.module';
 import { AuditInterceptor } from './common/interceptors/audit.interceptor';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ScheduleModule.forRoot(),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -47,6 +51,8 @@ import { AuditInterceptor } from './common/interceptors/audit.interceptor';
     AuditoriaModule,
     RootModule,
     DescuentosModule,
+    PlanesModule,
+    FacturacionModule,
   ],
   providers: [
     {

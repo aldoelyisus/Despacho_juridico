@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Users, FolderOpen, Calendar,
   CreditCard, UserCog, BookOpen, Settings,
   ChevronLeft, Scale, LogOut, Activity, Building2,
-  DollarSign, Crown, ShieldCheck, Tag,
+  DollarSign, Crown, Tag, Package,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { despachoApi } from '../../api/despacho.api';
@@ -27,7 +27,9 @@ const rootNavItems = [
   { to: '/root/dashboard',     icon: LayoutDashboard, label: 'Dashboard Global' },
   { separator: true },
   { to: '/root/despachos',     icon: Building2,       label: 'Despachos' },
+  { to: '/root/planes',        icon: Package,         label: 'Planes' },
   { to: '/root/mensualidades', icon: DollarSign,      label: 'Mensualidades' },
+  { to: '/root/auditoria',     icon: Activity,        label: 'Auditoría' },
 ];
 
 interface Props {
@@ -132,7 +134,7 @@ export default function Sidebar({ collapsed, onToggle }: Props) {
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{usuario?.nombre} {usuario?.apellido}</span>
                 </div>
                 <div className="sidebar-user-role" style={isRoot ? { color: '#f59e0b' } : {}}>
-                  {isRoot ? '👑 Root' : usuario?.rol?.nombre}
+                  {isRoot ? 'Administrador' : usuario?.rol?.nombre}
                 </div>
               </div>
             </Link>

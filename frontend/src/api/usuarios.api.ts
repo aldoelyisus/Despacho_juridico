@@ -6,5 +6,6 @@ export const usuariosApi = {
   get: (id: number) => api.get(`/usuarios/${id}`).then((r) => r.data),
   create: (data: any) => api.post('/usuarios', data).then((r) => r.data),
   update: (id: number, data: any) => api.patch(`/usuarios/${id}`, data).then((r) => r.data),
-  toggle: (id: number) => api.patch(`/usuarios/${id}/toggle`).then((r) => r.data),
+  toggle: (id: number, confirmExtra?: boolean) => api.patch(`/usuarios/${id}/toggle`, { confirmExtra }).then((r) => r.data),
+  resetPassword: (id: number) => api.patch(`/usuarios/${id}/reset-password`).then((r) => r.data),
 };
