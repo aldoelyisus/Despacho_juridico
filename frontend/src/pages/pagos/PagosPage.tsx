@@ -40,6 +40,7 @@ export default function PagosPage() {
     qc.invalidateQueries({ queryKey: ['pagos'] });
     qc.invalidateQueries({ queryKey: ['pagos-stats'] });
     qc.invalidateQueries({ queryKey: ['expedientes'] });
+    qc.invalidateQueries({ queryKey: ['expediente'] });
   };
 
   return (

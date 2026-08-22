@@ -183,7 +183,13 @@ export default function ExpedienteDetallePage() {
 
   const estadoM = useMutation({
     mutationFn: (estado: string) => expedientesApi.cambiarEstado(+id!, estado),
-    onSuccess: () => { invalidate(); toast.success('Estado actualizado'); },
+    onSuccess: () => {
+      invalidate();
+      qc.invalidateQueries({ queryKey: ['expedientes'] });
+      qc.invalidateQueries({ queryKey: ['expedientes-stats'] });
+      qc.invalidateQueries({ queryKey: ['expedientes-cliente'] });
+      toast.success('Estado actualizado');
+    },
     onError: (err: any) => toast.error(getErrorMessage(err, 'No se pudo actualizar el estado')),
   });
 

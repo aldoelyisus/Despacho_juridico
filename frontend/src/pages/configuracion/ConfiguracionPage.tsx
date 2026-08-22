@@ -292,7 +292,7 @@ export default function ConfiguracionPage() {
 
       <div style={{ padding: 'var(--sp-4)', background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.15)', borderRadius: 'var(--radius-md)', marginTop: 'var(--sp-4)' }}>
         <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
-          💡 Los cambios son exclusivos de <strong>{form.nombre}</strong> y no afectan a otros despachos.
+          💡 Los cambios se guardan automáticamente para <strong>{form.nombre}</strong>.
         </p>
       </div>
     </div>
