@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Post, Patch, Body, Param,
+  Controller, Get, Post, Patch, Delete, Body, Param,
   Query, ParseIntPipe, UseInterceptors, UploadedFile, Ip,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -48,6 +48,7 @@ export class ExpedientesController {
   @Post()
   @ApiOperation({ summary: 'Crear expediente' })
   @ApiResponse({ status: 400, description: 'Datos inválidos (título vacío, sin clientes asociados, etc.)' })
+  @ApiResponse({ status: 403, description: 'El despacho alcanzó el límite de expedientes de su plan' })
   create(@Body() dto: CreateExpedienteDto, @CurrentUser('despachoId') despachoId: number) {
     return this.service.create(dto, despachoId);
   }
@@ -106,6 +107,17 @@ export class ExpedientesController {
     @CurrentUser() user: any,
   ) {
     return this.service.getDocumentoUrl(id, documentoId, user);
+  }
+
+  @Delete(':id/documentos/:documentoId')
+  @ApiOperation({ summary: 'Eliminar un documento (borra el archivo de S3 y su referencia)' })
+  @ApiResponse({ status: 404, description: 'Expediente o documento no encontrado' })
+  deleteDocumento(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('documentoId', ParseIntPipe) documentoId: number,
+    @CurrentUser() user: any,
+  ) {
+    return this.service.deleteDocumento(id, documentoId, user);
   }
 
   @Post(':id/observaciones')

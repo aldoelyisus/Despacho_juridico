@@ -30,6 +30,7 @@ export default function ClientesPage() {
     mutationFn: (id: number) => clientesApi.remove(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['clientes'] });
+      qc.invalidateQueries({ queryKey: ['clientes-list'] });
       toast.success('Cliente desactivado');
     },
     onError: (err: any) => toast.error(getErrorMessage(err, 'Error al desactivar el cliente')),
@@ -155,6 +156,7 @@ export default function ClientesPage() {
             setModalOpen(false);
             qc.invalidateQueries({ queryKey: ['clientes'] });
             qc.invalidateQueries({ queryKey: ['clientes-stats'] });
+            qc.invalidateQueries({ queryKey: ['clientes-list'] });
           }}
         />
       )}

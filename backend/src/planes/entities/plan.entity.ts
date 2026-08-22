@@ -32,6 +32,10 @@ export class Plan extends BaseEntity {
   @ApiProperty({ description: 'Costo por cada usuario adicional al límite del plan', example: 150 })
   precioUsuarioExtra: number;
 
+  @Column({ name: 'numero_expedientes', type: 'int', nullable: true })
+  @ApiProperty({ description: 'Número de expedientes incluidos en el plan. null = sin límite (ilimitados)', example: 50, nullable: true })
+  numeroExpedientes: number | null;
+
   @DeleteDateColumn({ name: 'deleted_at' })
   deletedAt: Date;
 }

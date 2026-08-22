@@ -265,7 +265,8 @@ export default function ConfiguracionPage() {
             </div>
           </div>
 
-          {/* WhatsApp */}
+          {/* Integración WhatsApp — oculta hasta que la funcionalidad esté activa.
+              El bloque se deja comentado (no borrado) para reactivarla mostrándolo de nuevo.
           <div style={{ marginTop: 'var(--sp-6)', paddingTop: 'var(--sp-5)', borderTop: '1px solid var(--border-subtle)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', marginBottom: 'var(--sp-4)' }}>
               <h3>Integración WhatsApp</h3>
@@ -285,6 +286,7 @@ export default function ConfiguracionPage() {
               </div>
             </div>
           </div>
+          */}
         </div>
       </div>
 

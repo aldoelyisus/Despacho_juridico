@@ -43,6 +43,7 @@ function AreasPanel({ selectedArea, onSelectArea }: { selectedArea: { id: number
     mutationFn: (id: number) => catalogosApi.deleteArea(id),
     onSuccess: (_data, id) => {
       qc.invalidateQueries({ queryKey: ['catalogos-areas'] });
+      qc.invalidateQueries({ queryKey: ['areas'] });
       toast.success('Área desactivada');
       if (selectedArea?.id === id) onSelectArea(null);
     },
@@ -130,6 +131,7 @@ function AreasPanel({ selectedArea, onSelectArea }: { selectedArea: { id: number
           onSuccess={(updated) => {
             setModalOpen(false);
             qc.invalidateQueries({ queryKey: ['catalogos-areas'] });
+            qc.invalidateQueries({ queryKey: ['areas'] });
             if (updated && selectedArea?.id === updated.id) onSelectArea({ id: updated.id, nombre: updated.nombre });
           }}
         />
@@ -159,6 +161,7 @@ function SubareasPanel({ area }: { area: { id: number; nombre: string } | null }
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['catalogos-subareas'] });
       qc.invalidateQueries({ queryKey: ['catalogos-areas'] });
+      qc.invalidateQueries({ queryKey: ['subareas'] });
       toast.success('Subárea desactivada');
     },
     onError: (err: any) => toast.error(getErrorMessage(err, 'Error al desactivar la subárea')),
@@ -235,6 +238,7 @@ function SubareasPanel({ area }: { area: { id: number; nombre: string } | null }
             setModalOpen(false);
             qc.invalidateQueries({ queryKey: ['catalogos-subareas'] });
             qc.invalidateQueries({ queryKey: ['catalogos-areas'] });
+            qc.invalidateQueries({ queryKey: ['subareas'] });
           }}
         />
       )}
@@ -254,7 +258,11 @@ function ServiciosTab() {
 
   const deleteM = useMutation({
     mutationFn: (id: number) => catalogosApi.deleteServicio(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['servicios'] }); toast.success('Servicio desactivado'); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['servicios'] });
+      qc.invalidateQueries({ queryKey: ['servicios-list'] });
+      toast.success('Servicio desactivado');
+    },
     onError: (err: any) => toast.error(getErrorMessage(err, 'Error al desactivar el servicio')),
   });
 
@@ -306,6 +314,7 @@ function ServiciosTab() {
           onSuccess={() => {
             setModalOpen(false);
             qc.invalidateQueries({ queryKey: ['servicios'] });
+            qc.invalidateQueries({ queryKey: ['servicios-list'] });
           }}
         />
       )}

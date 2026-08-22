@@ -79,6 +79,7 @@ export default function UsuariosPage() {
     mutationFn: (data: any) => usuariosApi.create({ ...data, rolId: +data.rolId }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['usuarios'] });
+      qc.invalidateQueries({ queryKey: ['usuarios-list'] });
       setModalOpen(false);
       toast.success('Usuario creado');
       setCredenciales({ email: form.email, password: form.password });
@@ -100,7 +101,11 @@ export default function UsuariosPage() {
 
   const toggleM = useMutation({
     mutationFn: ({ id, confirmExtra }: { id: number; confirmExtra?: boolean }) => usuariosApi.toggle(id, confirmExtra),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['usuarios'] }); toast.success('Estado actualizado'); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['usuarios'] });
+      qc.invalidateQueries({ queryKey: ['usuarios-list'] });
+      toast.success('Estado actualizado');
+    },
     onError: (e: any, variables) => {
       const info = e.response?.data;
       if (e.response?.status === 402 && info?.requiereConfirmacion) {

@@ -17,6 +17,9 @@ export const expedientesApi = {
   getDocumentoUrl: (id: number, documentoId: number) =>
     api.get(`/expedientes/${id}/documentos/${documentoId}/url`).then((r) => r.data),
 
+  deleteDocumento: (id: number, documentoId: number) =>
+    api.delete(`/expedientes/${id}/documentos/${documentoId}`).then((r) => r.data),
+
   addObservacion: (id: number, contenido: string) =>
     api.post(`/expedientes/${id}/observaciones`, { contenido }).then((r) => r.data),
 

@@ -7,7 +7,7 @@ import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 
 const emptyForm = {
   nombre: '', costoMensualidad: '', iva: '16', isPersonaMoral: true, isPersonaFisica: true,
-  numeroUsuarios: '', precioUsuarioExtra: '',
+  numeroUsuarios: '', precioUsuarioExtra: '', numeroExpedientes: '',
 };
 
 function PlanModal({ plan, onClose, onSuccess }: any) {
@@ -19,6 +19,7 @@ function PlanModal({ plan, onClose, onSuccess }: any) {
     isPersonaFisica: plan.isPersonaFisica,
     numeroUsuarios: plan.numeroUsuarios,
     precioUsuarioExtra: plan.precioUsuarioExtra,
+    numeroExpedientes: plan.numeroExpedientes ?? '',
   } : emptyForm);
   const set = (f: string) => (e: any) => setForm(p => ({ ...p, [f]: e.target.value }));
   const setBool = (f: string) => (e: any) => setForm(p => ({ ...p, [f]: e.target.checked }));
@@ -47,6 +48,7 @@ function PlanModal({ plan, onClose, onSuccess }: any) {
             iva: Number(form.iva),
             numeroUsuarios: Number(form.numeroUsuarios),
             precioUsuarioExtra: Number(form.precioUsuarioExtra || 0),
+            numeroExpedientes: form.numeroExpedientes === '' ? null : Number(form.numeroExpedientes),
           });
         }}>
           <div className="modal-body">
@@ -70,6 +72,11 @@ function PlanModal({ plan, onClose, onSuccess }: any) {
               <div className="form-group">
                 <label className="form-label">Precio por usuario extra ($)</label>
                 <input className="form-input" type="number" step="0.01" value={form.precioUsuarioExtra} onChange={set('precioUsuarioExtra')} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Expedientes incluidos</label>
+                <input className="form-input" type="number" min="0" placeholder="Ilimitados" value={form.numeroExpedientes} onChange={set('numeroExpedientes')} />
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 4 }}>Déjalo vacío para expedientes ilimitados</p>
               </div>
               <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <input type="checkbox" checked={form.isPersonaFisica} onChange={setBool('isPersonaFisica')} />
@@ -135,13 +142,14 @@ export default function RootPlanesPage() {
                 <th>IVA</th>
                 <th>Usuarios incluidos</th>
                 <th>Precio usuario extra</th>
+                <th>Expedientes incluidos</th>
                 <th>Tipo persona</th>
                 <th>Acciones</th>
               </tr>
             </thead>
             <tbody>
               {isLoading && (
-                <tr><td colSpan={7} style={{ textAlign: 'center', padding: 'var(--sp-8)' }}><div className="spinner" /></td></tr>
+                <tr><td colSpan={8} style={{ textAlign: 'center', padding: 'var(--sp-8)' }}><div className="spinner" /></td></tr>
               )}
               {planes?.map((p: any) => (
                 <tr key={p.id}>
@@ -152,6 +160,7 @@ export default function RootPlanesPage() {
                   <td>{Number(p.iva)}%</td>
                   <td>{p.numeroUsuarios}</td>
                   <td>${Number(p.precioUsuarioExtra).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
+                  <td>{p.numeroExpedientes ?? <span style={{ color: 'var(--text-muted)' }}>Ilimitados</span>}</td>
                   <td style={{ fontSize: '0.8rem' }}>
                     {p.isPersonaFisica && <span className="badge badge-accent" style={{ marginRight: 4 }}>Física</span>}
                     {p.isPersonaMoral && <span className="badge badge-accent">Moral</span>}
@@ -179,7 +188,7 @@ export default function RootPlanesPage() {
                 </tr>
               ))}
               {!isLoading && !planes?.length && (
-                <tr><td colSpan={7}>
+                <tr><td colSpan={8}>
                   <div className="empty-state">
                     <div className="empty-icon"><Package size={40} /></div>
                     <h3>Sin planes</h3>

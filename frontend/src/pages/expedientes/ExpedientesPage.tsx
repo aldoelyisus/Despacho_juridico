@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Eye, Edit, FolderOpen, UserCircle } from 'lucide-react';
+import { Plus, Search, Eye, Edit, FolderOpen, UserCircle, X, AlertTriangle } from 'lucide-react';
 import { expedientesApi } from '../../api/expedientes.api';
 import { clientesApi } from '../../api/clientes.api';
 import ExpedienteModal from './ExpedienteModal';
@@ -17,6 +17,52 @@ const ESTADO_LABELS: Record<string, string> = {
   perdido: 'Perdido', suspendido: 'Suspendido', cancelado: 'Cancelado',
 };
 
+// ── Barra sutil de uso del plan (expedientes usados / incluidos) ────────────
+function LimitePlanBar({ actuales, limite }: { actuales: number; limite: number }) {
+  const porcentaje = Math.min(100, Math.round((actuales / limite) * 100));
+  const color = porcentaje >= 95 ? 'var(--danger)' : porcentaje >= 80 ? '#f59e0b' : 'var(--success)';
+  return (
+    <div style={{ marginBottom: 'var(--sp-4)' }}>
+      <div style={{
+        display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem',
+        color: 'var(--text-muted)', marginBottom: 4,
+      }}>
+        <span>Expedientes de tu plan</span>
+        <span>{actuales} / {limite} ({porcentaje}%)</span>
+      </div>
+      <div style={{ height: 6, borderRadius: 99, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
+        <div style={{ height: '100%', width: `${porcentaje}%`, background: color, borderRadius: 99, transition: 'width 0.3s ease' }} />
+      </div>
+    </div>
+  );
+}
+
+// ── Modal informativo al alcanzar el límite del plan ─────────────────────────
+function LimiteAlcanzadoModal({ limite, onClose }: { limite: number; onClose: () => void }) {
+  return (
+    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal">
+        <div className="modal-header">
+          <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <AlertTriangle size={18} style={{ color: 'var(--danger)' }} />
+            Límite de expedientes alcanzado
+          </h3>
+          <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="modal-body">
+          <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+            Tu despacho ya tiene {limite} expedientes registrados, el máximo incluido en tu plan actual.
+            Contacta al administrador del sistema para ampliar tu plan y seguir creando expedientes.
+          </p>
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-primary" onClick={onClose}>Entendido</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ExpedientesPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -26,6 +72,7 @@ export default function ExpedientesPage() {
   const [pagina, setPagina] = useState(1);
   const [modalOpen, setModalOpen] = useState(false);
   const [editExp, setEditExp] = useState<any>(null);
+  const [showLimiteModal, setShowLimiteModal] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['expedientes', busqueda, estadoFilter, clienteFilter, pagina],
@@ -48,6 +95,16 @@ export default function ExpedientesPage() {
     queryFn: expedientesApi.stats,
   });
 
+  const limiteExpedientes: number | null = stats?.limiteExpedientes ?? null;
+  const expedientesActuales: number = stats?.expedientesActuales ?? 0;
+  const limiteAlcanzado = limiteExpedientes !== null && expedientesActuales >= limiteExpedientes;
+
+  const handleNuevoExpediente = () => {
+    if (limiteAlcanzado) { setShowLimiteModal(true); return; }
+    setEditExp(null);
+    setModalOpen(true);
+  };
+
   return (
     <div>
       <div className="page-header">
@@ -55,10 +112,14 @@ export default function ExpedientesPage() {
           <h1 className="page-title">Expedientes</h1>
           <p className="page-subtitle">{data?.total || 0} expedientes totales</p>
         </div>
-        <button id="nuevo-expediente-btn" className="btn btn-primary" onClick={() => { setEditExp(null); setModalOpen(true); }}>
+        <button id="nuevo-expediente-btn" className="btn btn-primary" onClick={handleNuevoExpediente}>
           <Plus size={16} /> Nuevo Expediente
         </button>
       </div>
+
+      {limiteExpedientes !== null && (
+        <LimitePlanBar actuales={expedientesActuales} limite={limiteExpedientes} />
+      )}
 
       {/* Stats */}
       <div className="clientes-stats">
@@ -130,7 +191,7 @@ export default function ExpedientesPage() {
                   <FolderOpen size={40} style={{ opacity: 0.3 }} />
                   <h3>No hay expedientes</h3>
                   <p>Crea el primer expediente del despacho</p>
-                  <button className="btn btn-primary" onClick={() => { setEditExp(null); setModalOpen(true); }}><Plus size={16} /> Nuevo Expediente</button>
+                  <button className="btn btn-primary" onClick={handleNuevoExpediente}><Plus size={16} /> Nuevo Expediente</button>
                 </div>
               </td></tr>
             ) : data?.items?.map((e: any) => (
@@ -175,8 +236,17 @@ export default function ExpedientesPage() {
         <ExpedienteModal
           expediente={editExp}
           onClose={() => setModalOpen(false)}
-          onSuccess={() => { setModalOpen(false); qc.invalidateQueries({ queryKey: ['expedientes'] }); }}
+          onSuccess={() => {
+            setModalOpen(false);
+            qc.invalidateQueries({ queryKey: ['expedientes'] });
+            qc.invalidateQueries({ queryKey: ['expedientes-stats'] });
+            qc.invalidateQueries({ queryKey: ['expedientes-cliente'] });
+          }}
         />
+      )}
+
+      {showLimiteModal && limiteExpedientes !== null && (
+        <LimiteAlcanzadoModal limite={limiteExpedientes} onClose={() => setShowLimiteModal(false)} />
       )}
     </div>
   );

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, HttpException, HttpStatus } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { Expediente, EstadoExpediente } from './entities/expediente.entity';
@@ -120,6 +120,17 @@ export class ExpedientesService {
     }
     const { clienteIds, colaboradorIds, ...rest } = dto;
     const count = await this.repo.count({ where: { despachoId } });
+
+    const limite = await this.getLimiteExpedientes(despachoId);
+    if (limite !== null && count >= limite) {
+      throw new HttpException({
+        limiteAlcanzado: true,
+        expedientesActuales: count,
+        limiteExpedientes: limite,
+        message: `Alcanzaste el límite de ${limite} expedientes de tu plan. Contacta al administrador del sistema para ampliar tu plan.`,
+      }, HttpStatus.FORBIDDEN);
+    }
+
     const year = new Date().getFullYear();
     const numero = `EXP-${year}-${String(count + 1).padStart(4, '0')}`;
     const exp = Object.assign(new Expediente(), {
@@ -209,6 +220,23 @@ export class ExpedientesService {
     return { url, expiraEnSegundos };
   }
 
+  /** Borra el archivo de S3 y su referencia en la base de datos (ej. se subió por error) */
+  async deleteDocumento(expedienteId: number, documentoId: number, user: any) {
+    const exp = await this.findOne(expedienteId, user);
+    const doc = exp.documentos?.find((d) => d.id === documentoId);
+    if (!doc) throw new NotFoundException('Documento no encontrado');
+
+    await this.s3Service.deleteFile(doc.ruta);
+    await this.docRepo.delete({ id: documentoId, expedienteId });
+
+    await this.registrarAuditoria(
+      user.despachoId, 'DOCUMENTO_ELIMINADO', user, undefined,
+      `Se eliminó el documento "${doc.nombre}" del expediente ${exp.numero}`,
+    );
+
+    return { success: true };
+  }
+
   /** despachos/{despachoId}-{slug}/{clienteId}-{slug}/{numero de expediente}/{archivo}
    *  Si el expediente tiene varios clientes, se usa el primero como "dueño" de la carpeta —
    *  es solo organización dentro de S3, no afecta a quién pertenece el expediente en la BD. */
@@ -274,7 +302,17 @@ export class ExpedientesService {
       (sum: number, st: string) => sum + Number(byStatus.find((s: any) => s.estado === st)?.total || 0), 0
     );
     const tasaExito = cerrados > 0 ? Math.round((ganados / cerrados) * 100) : 0;
-    return { byStatus, tasaExito };
+
+    const expedientesActuales = await this.repo.count({ where: { despachoId } });
+    const limiteExpedientes = await this.getLimiteExpedientes(despachoId);
+
+    return { byStatus, tasaExito, expedientesActuales, limiteExpedientes };
+  }
+
+  /** null = el despacho no tiene plan asignado o su plan no limita expedientes (ilimitados) */
+  private async getLimiteExpedientes(despachoId: number): Promise<number | null> {
+    const despacho = await this.despachoRepo.findOne({ where: { id: despachoId }, relations: { plan: true } });
+    return despacho?.plan?.numeroExpedientes ?? null;
   }
 
   private async registrarAuditoria(despachoId: number, accion: string, usuario: any, ip: string | undefined, descripcion: string) {

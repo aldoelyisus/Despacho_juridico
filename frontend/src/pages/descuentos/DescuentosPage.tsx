@@ -20,7 +20,11 @@ export default function DescuentosPage() {
 
   const deleteM = useMutation({
     mutationFn: (id: number) => descuentosApi.remove(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['descuentos'] }); toast.success('Descuento eliminado'); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['descuentos'] });
+      qc.invalidateQueries({ queryKey: ['descuentos-activos'] });
+      toast.success('Descuento eliminado');
+    },
     onError: (err: any) => toast.error(getErrorMessage(err, 'Error al eliminar el descuento')),
   });
 
@@ -138,7 +142,12 @@ export default function DescuentosPage() {
         <DescuentoModal
           descuento={editing}
           onClose={() => { setModalOpen(false); setEditing(null); }}
-          onSuccess={() => { setModalOpen(false); setEditing(null); qc.invalidateQueries({ queryKey: ['descuentos'] }); }}
+          onSuccess={() => {
+            setModalOpen(false);
+            setEditing(null);
+            qc.invalidateQueries({ queryKey: ['descuentos'] });
+            qc.invalidateQueries({ queryKey: ['descuentos-activos'] });
+          }}
         />
       )}
       {confirmDialog}

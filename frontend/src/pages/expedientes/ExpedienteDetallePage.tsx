@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, Upload, MessageSquare, Calendar, File, FileText, FileSpreadsheet, Image as ImageIcon,
   Send, Loader2, Pencil, Users, Briefcase, FolderOpen, Tag, BadgeDollarSign, CalendarDays, StickyNote,
-  Plus, Printer, ChevronDown, ChevronRight, Receipt, CreditCard,
+  Plus, Printer, ChevronDown, ChevronRight, Receipt, CreditCard, Trash2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { expedientesApi } from '../../api/expedientes.api';
@@ -197,6 +197,22 @@ export default function ExpedienteDetallePage() {
     onSuccess: () => { invalidate(); toast.success('Documento subido'); },
     onError: (err: any) => toast.error(getErrorMessage(err, 'No se pudo subir el archivo')),
   });
+
+  const deleteDocM = useMutation({
+    mutationFn: (documentoId: number) => expedientesApi.deleteDocumento(+id!, documentoId),
+    onSuccess: () => { invalidate(); toast.success('Documento eliminado'); },
+    onError: (err: any) => toast.error(getErrorMessage(err, 'No se pudo eliminar el documento')),
+  });
+
+  const handleEliminarDocumento = (doc: any) => {
+    askConfirm({
+      title: 'Eliminar documento',
+      message: `¿Eliminar "${doc.nombre}"? Esta acción no se puede deshacer — el archivo se borra permanentemente del almacenamiento.`,
+      confirmLabel: 'Eliminar',
+      danger: true,
+      onConfirm: () => deleteDocM.mutate(doc.id),
+    });
+  };
 
   const handleVerDocumento = async (documentoId: number) => {
     setVerDocumentoId(documentoId);
@@ -409,13 +425,23 @@ export default function ExpedienteDetallePage() {
                         </div>
                         {d.descripcion && <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 2 }}>{d.descripcion}</div>}
                       </div>
-                      <button
-                        className="btn btn-ghost btn-sm"
-                        disabled={verDocumentoId === d.id}
-                        onClick={() => handleVerDocumento(d.id)}
-                      >
-                        {verDocumentoId === d.id ? <Loader2 size={14} className="spinning" /> : 'Ver'}
-                      </button>
+                      <div style={{ display: 'flex', gap: 'var(--sp-2)' }}>
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          disabled={verDocumentoId === d.id}
+                          onClick={() => handleVerDocumento(d.id)}
+                        >
+                          {verDocumentoId === d.id ? <Loader2 size={14} className="spinning" /> : 'Ver'}
+                        </button>
+                        <button
+                          className="btn btn-ghost btn-icon btn-icon-sm"
+                          disabled={deleteDocM.isPending}
+                          onClick={() => handleEliminarDocumento(d)}
+                          data-tooltip="Eliminar documento"
+                        >
+                          <Trash2 size={14} style={{ color: 'var(--danger)' }} />
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>

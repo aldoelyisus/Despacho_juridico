@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { NotFoundException, BadRequestException } from '@nestjs/common';
+import { NotFoundException, BadRequestException, HttpException } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { ExpedientesService } from './expedientes.service';
@@ -43,6 +43,7 @@ const repoMockFactory = () => ({
   create: jest.fn((data) => data),
   save: jest.fn((data) => Promise.resolve({ id: 1, ...data })),
   update: jest.fn(),
+  delete: jest.fn(),
   createQueryBuilder: jest.fn(),
 });
 
@@ -183,6 +184,40 @@ describe('ExpedientesService', () => {
       expect(options.select.password).toBeUndefined();
       expect(options.select.twoFactorSecret).toBeUndefined();
       expect(options.select.twoFactorBackupCodes).toBeUndefined();
+    });
+
+    it('blocks creation when the despacho reached its plan expediente limit', async () => {
+      repo.count.mockResolvedValue(5);
+      despachoRepo.findOne.mockResolvedValue({ id: 1, plan: { numeroExpedientes: 5 } });
+      clienteRepo.findBy.mockResolvedValue([{ id: 4, despachoId: 1 }]);
+      await expect(
+        service.create({ titulo: 'Caso', clienteIds: [4] } as any, 1),
+      ).rejects.toThrow(HttpException);
+      expect(repo.save).not.toHaveBeenCalled();
+    });
+
+    it('allows creation when still under the plan expediente limit', async () => {
+      repo.count.mockResolvedValue(2);
+      despachoRepo.findOne.mockResolvedValue({ id: 1, plan: { numeroExpedientes: 5 } });
+      clienteRepo.findBy.mockResolvedValue([{ id: 4, despachoId: 1 }]);
+      const result = await service.create({ titulo: 'Caso', clienteIds: [4] } as any, 1);
+      expect(result.despachoId).toBe(1);
+    });
+
+    it('allows unlimited creation when the plan has no expediente limit set (null)', async () => {
+      repo.count.mockResolvedValue(999);
+      despachoRepo.findOne.mockResolvedValue({ id: 1, plan: { numeroExpedientes: null } });
+      clienteRepo.findBy.mockResolvedValue([{ id: 4, despachoId: 1 }]);
+      const result = await service.create({ titulo: 'Caso', clienteIds: [4] } as any, 1);
+      expect(result.despachoId).toBe(1);
+    });
+
+    it('allows unlimited creation when the despacho has no plan assigned', async () => {
+      repo.count.mockResolvedValue(999);
+      despachoRepo.findOne.mockResolvedValue({ id: 1, plan: null });
+      clienteRepo.findBy.mockResolvedValue([{ id: 4, despachoId: 1 }]);
+      const result = await service.create({ titulo: 'Caso', clienteIds: [4] } as any, 1);
+      expect(result.despachoId).toBe(1);
     });
 
     it('ignores a client-supplied montoTotal and always starts at 0', async () => {
@@ -408,6 +443,38 @@ describe('ExpedientesService', () => {
     });
   });
 
+  describe('deleteDocumento', () => {
+    it('throws NotFoundException when the expediente is not accessible', async () => {
+      const qb = createQueryBuilderMock({ getOne: jest.fn().mockResolvedValue(null) });
+      repo.createQueryBuilder.mockReturnValue(qb);
+      await expect(service.deleteDocumento(1, 1, colaboradorUser)).rejects.toThrow(NotFoundException);
+      expect(s3Service.deleteFile).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException when the documento does not belong to the expediente', async () => {
+      const qb = createQueryBuilderMock({
+        getOne: jest.fn().mockResolvedValue({ id: 1, despachoId: 1, numero: 'EXP-2026-0001', documentos: [{ id: 5, ruta: 'x' }] }),
+      });
+      repo.createQueryBuilder.mockReturnValue(qb);
+      await expect(service.deleteDocumento(1, 999, adminUser)).rejects.toThrow(NotFoundException);
+      expect(s3Service.deleteFile).not.toHaveBeenCalled();
+    });
+
+    it('deletes the S3 object and the DB row scoped to the expediente', async () => {
+      const qb = createQueryBuilderMock({
+        getOne: jest.fn().mockResolvedValue({
+          id: 1, despachoId: 1, numero: 'EXP-2026-0001',
+          documentos: [{ id: 5, nombre: 'contrato.pdf', ruta: 'despachos/1-bufete/4-jose/EXP-2026-0001/archivo.pdf' }],
+        }),
+      });
+      repo.createQueryBuilder.mockReturnValue(qb);
+      const result = await service.deleteDocumento(1, 5, adminUser);
+      expect(s3Service.deleteFile).toHaveBeenCalledWith('despachos/1-bufete/4-jose/EXP-2026-0001/archivo.pdf');
+      expect(docRepo.delete).toHaveBeenCalledWith({ id: 5, expedienteId: 1 });
+      expect(result).toEqual({ success: true });
+    });
+  });
+
   describe('addObservacion', () => {
     it('throws NotFoundException when the expediente is not accessible', async () => {
       const qb = createQueryBuilderMock({ getOne: jest.fn().mockResolvedValue(null) });
@@ -465,6 +532,25 @@ describe('ExpedientesService', () => {
       repo.createQueryBuilder.mockReturnValue(qb);
       const result = await service.getStats(adminUser);
       expect(result.tasaExito).toBe(75); // 3 ganados / 4 resueltos
+    });
+
+    it('reports the despacho-wide expediente count against the plan limit', async () => {
+      const qb = createQueryBuilderMock({ getRawMany: jest.fn().mockResolvedValue([]) });
+      repo.createQueryBuilder.mockReturnValue(qb);
+      repo.count.mockResolvedValue(7);
+      despachoRepo.findOne.mockResolvedValue({ id: 1, plan: { numeroExpedientes: 10 } });
+      const result = await service.getStats(adminUser);
+      expect(result.expedientesActuales).toBe(7);
+      expect(result.limiteExpedientes).toBe(10);
+    });
+
+    it('reports a null limiteExpedientes when the plan has no limit configured', async () => {
+      const qb = createQueryBuilderMock({ getRawMany: jest.fn().mockResolvedValue([]) });
+      repo.createQueryBuilder.mockReturnValue(qb);
+      repo.count.mockResolvedValue(7);
+      despachoRepo.findOne.mockResolvedValue({ id: 1, plan: { numeroExpedientes: null } });
+      const result = await service.getStats(adminUser);
+      expect(result.limiteExpedientes).toBeNull();
     });
   });
 });
