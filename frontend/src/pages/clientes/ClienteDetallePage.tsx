@@ -2,8 +2,6 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, FolderOpen } from 'lucide-react';
 import { clientesApi } from '../../api/clientes.api';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
 
 const EXPEDIENTE_ESTADO_COLOR: Record<string, string> = {
   consulta: 'accent', activo: 'info', ganado: 'success', perdido: 'danger', suspendido: 'warning', cancelado: 'muted',

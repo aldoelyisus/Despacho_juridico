@@ -21,11 +21,6 @@ import RootAuditoriaPage from './pages/root/RootAuditoriaPage';
 import PerfilPage from './pages/perfil/PerfilPage';
 import DescuentosPage from './pages/descuentos/DescuentosPage';
 
-function PrivateRoute({ children }: { children: React.ReactNode }) {
-  const { token } = useAuthStore();
-  return token ? <>{children}</> : <Navigate to="/login" replace />;
-}
-
 function RootRoute({ children }: { children: React.ReactNode }) {
   const { token, usuario } = useAuthStore();
   if (!token) return <Navigate to="/login" replace />;
