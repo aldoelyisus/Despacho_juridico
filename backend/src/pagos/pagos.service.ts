@@ -153,11 +153,16 @@ export class PagosService {
     const detalle = this.detalleRepo.create({ ...dto, pagoId: id, despachoId });
     await this.detalleRepo.save(detalle);
 
-    pago.montoPagado = Number(pago.montoPagado) + Number(dto.monto);
-    pago.montoPendiente = Number(pago.montoTotal) - Number(pago.montoPagado);
-    pago.estado = pago.montoPendiente <= 0 ? EstadoPago.PAGADO : EstadoPago.PARCIAL;
+    const montoPagado = Number(pago.montoPagado) + Number(dto.monto);
+    const montoPendiente = Number(pago.montoTotal) - montoPagado;
+    const estado = montoPendiente <= 0 ? EstadoPago.PAGADO : EstadoPago.PARCIAL;
 
-    return this.repo.save(pago);
+    // update() en vez de save(pago): pago.detalles quedó cargado (por el findOne de arriba) desde
+    // ANTES de insertar el nuevo detalle. Como la relación tiene cascade:true, guardar el objeto
+    // "pago" completo haría que TypeORM compare ese arreglo desactualizado contra la BD y borre
+    // el detalle recién insertado por considerarlo huérfano. update() no toca relaciones.
+    await this.repo.update({ id, despachoId }, { montoPagado, montoPendiente, estado });
+    return this.findOne(id, despachoId);
   }
 
   async getStats(despachoId: number, query: any = {}) {

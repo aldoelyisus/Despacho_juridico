@@ -222,17 +222,41 @@ describe('PagosService', () => {
     });
 
     it('marks the pago as pagado when the abono covers the full remaining balance exactly', async () => {
-      repo.findOne.mockResolvedValue({ id: 1, despachoId: 1, estado: EstadoPago.PENDIENTE, montoPendiente: 300, montoTotal: 500, montoPagado: 200, detalles: [] });
+      repo.findOne
+        .mockResolvedValueOnce({ id: 1, despachoId: 1, estado: EstadoPago.PENDIENTE, montoPendiente: 300, montoTotal: 500, montoPagado: 200, detalles: [] })
+        .mockResolvedValueOnce({ id: 1, despachoId: 1, estado: EstadoPago.PAGADO, montoPendiente: 0, montoTotal: 500, montoPagado: 500, detalles: [{ id: 9, monto: 300 }] });
+
       const result = await service.registrarAbono(1, { monto: 300, fechaPago: '2026-08-20' } as CreateAbonoDto, 1);
+
+      expect(repo.update).toHaveBeenCalledWith({ id: 1, despachoId: 1 }, { montoPagado: 500, montoPendiente: 0, estado: EstadoPago.PAGADO });
       expect(result.montoPagado).toBe(500);
       expect(result.montoPendiente).toBe(0);
       expect(result.estado).toBe(EstadoPago.PAGADO);
+      expect(result.detalles).toHaveLength(1);
     });
 
     it('tolerates sub-cent floating point noise when comparing to the pending balance', async () => {
-      repo.findOne.mockResolvedValue({ id: 1, despachoId: 1, estado: EstadoPago.PENDIENTE, montoPendiente: 0.1 + 0.2, montoTotal: 0.3, montoPagado: 0, detalles: [] });
+      repo.findOne
+        .mockResolvedValueOnce({ id: 1, despachoId: 1, estado: EstadoPago.PENDIENTE, montoPendiente: 0.1 + 0.2, montoTotal: 0.3, montoPagado: 0, detalles: [] })
+        .mockResolvedValueOnce({ id: 1, despachoId: 1, estado: EstadoPago.PAGADO, montoPendiente: 0, montoTotal: 0.3, montoPagado: 0.3, detalles: [] });
+
       const result = await service.registrarAbono(1, { monto: 0.3, fechaPago: '2026-08-20' } as CreateAbonoDto, 1);
       expect(result.estado).toBe(EstadoPago.PAGADO);
+    });
+
+    it('never calls save() with the full pago entity — regression guard for the cascade orphan-delete bug', async () => {
+      // repo.save(pago), con `detalles` cargado desde ANTES de insertar el nuevo abono y
+      // cascade:true en esa relación, hacía que TypeORM borrara el detalle recién insertado por
+      // considerarlo huérfano (el arreglo en memoria no lo incluía). update() no toca relaciones.
+      repo.findOne
+        .mockResolvedValueOnce({ id: 1, despachoId: 1, estado: EstadoPago.PENDIENTE, montoPendiente: 300, montoTotal: 500, montoPagado: 200, detalles: [] })
+        .mockResolvedValueOnce({ id: 1, despachoId: 1, estado: EstadoPago.PAGADO, montoPendiente: 0, montoTotal: 500, montoPagado: 500, detalles: [{ id: 9, monto: 300 }] });
+
+      await service.registrarAbono(1, { monto: 300, fechaPago: '2026-08-20' } as CreateAbonoDto, 1);
+
+      expect(repo.save).not.toHaveBeenCalled();
+      expect(repo.update).toHaveBeenCalledTimes(1);
+      expect(detalleRepo.save).toHaveBeenCalledTimes(1);
     });
   });
 
