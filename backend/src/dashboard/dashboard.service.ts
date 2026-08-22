@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Expediente } from '../expedientes/entities/expediente.entity';
@@ -7,6 +7,9 @@ import { Pago } from '../pagos/entities/pago.entity';
 import { EventoAgenda } from '../agenda/entities/evento-agenda.entity';
 import { LogAuditoria } from '../auditoria/entities/log-auditoria.entity';
 import { EstadisticasService } from '../estadisticas/estadisticas.service';
+import {
+  TipoPeriodo, validarTipoYValor, calcularRangoPeriodo, periodoAnterior, calcularCrecimiento,
+} from './periodo.util';
 
 @Injectable()
 export class DashboardService {
@@ -152,5 +155,80 @@ export class DashboardService {
   /** Tendencia de expedientes por estatus de los últimos N días — foto diaria, nunca sumada entre fechas */
   async getExpedientesHistorico(despachoId: number, dias = 30) {
     return this.estadisticasService.getExpedientesHistorico(despachoId, dias);
+  }
+
+  private resumenExpedientes(filas: { estado: string; cantidad: number }[]) {
+    return {
+      byStatus: filas,
+      total: filas.reduce((s, f) => s + f.cantidad, 0),
+      activos: filas.find((f) => f.estado === 'activo')?.cantidad || 0,
+      ganados: filas.find((f) => f.estado === 'ganado')?.cantidad || 0,
+    };
+  }
+
+  /**
+   * Resumen de ingresos (sumados) y expedientes (foto al cierre) de un período, comparado con el
+   * período inmediato anterior del mismo tipo — con crecimiento en % y valor absoluto.
+   */
+  async getResumenPeriodo(despachoId: number, tipo: string, anio: number, valor?: number) {
+    validarTipoYValor(tipo, valor);
+    const tipoValido = tipo as TipoPeriodo;
+
+    const actual = calcularRangoPeriodo(tipoValido, anio, valor);
+    const ant = periodoAnterior(tipoValido, anio, valor);
+    const anterior = calcularRangoPeriodo(tipoValido, ant.anio, ant.valor);
+
+    const hoy = new Date();
+    const cierreActual = actual.hasta > hoy ? hoy : actual.hasta;
+    const cierreAnterior = anterior.hasta > hoy ? hoy : anterior.hasta;
+
+    const [ingActual, ingAnterior, expActualFilas, expAnteriorFilas] = await Promise.all([
+      this.estadisticasService.getIngresosPeriodo(despachoId, actual.desde, actual.hasta),
+      this.estadisticasService.getIngresosPeriodo(despachoId, anterior.desde, anterior.hasta),
+      this.estadisticasService.getExpedientesEnFecha(despachoId, cierreActual),
+      this.estadisticasService.getExpedientesEnFecha(despachoId, cierreAnterior),
+    ]);
+
+    const expActual = this.resumenExpedientes(expActualFilas);
+    const expAnterior = this.resumenExpedientes(expAnteriorFilas);
+
+    return {
+      periodo: {
+        tipo: tipoValido, anio, valor: valor ?? null,
+        desde: actual.desde.toISOString().split('T')[0], hasta: actual.hasta.toISOString().split('T')[0],
+        etiqueta: actual.etiqueta,
+      },
+      periodoAnterior: {
+        anio: ant.anio, valor: ant.valor ?? null,
+        desde: anterior.desde.toISOString().split('T')[0], hasta: anterior.hasta.toISOString().split('T')[0],
+        etiqueta: anterior.etiqueta,
+      },
+      ingresos: {
+        actual: ingActual,
+        anterior: ingAnterior,
+        crecimientoMonto: calcularCrecimiento(ingActual.monto, ingAnterior.monto),
+        crecimientoTickets: calcularCrecimiento(ingActual.numTickets, ingAnterior.numTickets),
+      },
+      expedientes: {
+        actual: expActual,
+        anterior: expAnterior,
+        crecimientoTotal: calcularCrecimiento(expActual.total, expAnterior.total),
+        crecimientoActivos: calcularCrecimiento(expActual.activos, expAnterior.activos),
+        crecimientoGanados: calcularCrecimiento(expActual.ganados, expAnterior.ganados),
+      },
+    };
+  }
+
+  /** Ingresos sumados y expedientes al cierre de un rango de días específico (dentro de un mes) */
+  async getResumenDia(despachoId: number, desde: string, hasta: string) {
+    if (!desde || !hasta) throw new BadRequestException('Debes indicar "desde" y "hasta" (YYYY-MM-DD)');
+    if (desde > hasta) throw new BadRequestException('"desde" no puede ser posterior a "hasta"');
+
+    const [ingresos, filas] = await Promise.all([
+      this.estadisticasService.getIngresosPeriodo(despachoId, new Date(desde), new Date(hasta)),
+      this.estadisticasService.getExpedientesEnFecha(despachoId, new Date(hasta)),
+    ]);
+
+    return { desde, hasta, ingresos, expedientes: this.resumenExpedientes(filas) };
   }
 }

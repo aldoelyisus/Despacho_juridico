@@ -67,6 +67,36 @@ describe('PagosService', () => {
     descuentosService = module.get(DescuentosService) as any;
   });
 
+  describe('findAll', () => {
+    it('lists without a date filter when desde/hasta are not provided', async () => {
+      repo.findAndCount.mockResolvedValue([[], 0]);
+      await service.findAll(1, {});
+      const [options] = repo.findAndCount.mock.calls[0];
+      expect(options.where.createdAt).toBeUndefined();
+    });
+
+    it('filters by an inclusive date range when both desde and hasta are provided', async () => {
+      repo.findAndCount.mockResolvedValue([[], 0]);
+      await service.findAll(1, { desde: '2026-08-01', hasta: '2026-08-15' });
+      const [options] = repo.findAndCount.mock.calls[0];
+      expect(options.where.createdAt.value).toEqual([new Date('2026-08-01T00:00:00'), new Date('2026-08-15T23:59:59.999')]);
+    });
+
+    it('filters from desde onward when only desde is provided', async () => {
+      repo.findAndCount.mockResolvedValue([[], 0]);
+      await service.findAll(1, { desde: '2026-08-01' });
+      const [options] = repo.findAndCount.mock.calls[0];
+      expect(options.where.createdAt.value).toEqual(new Date('2026-08-01T00:00:00'));
+    });
+
+    it('filters up to hasta when only hasta is provided', async () => {
+      repo.findAndCount.mockResolvedValue([[], 0]);
+      await service.findAll(1, { hasta: '2026-08-15' });
+      const [options] = repo.findAndCount.mock.calls[0];
+      expect(options.where.createdAt.value).toEqual(new Date('2026-08-15T23:59:59.999'));
+    });
+  });
+
   describe('findOne', () => {
     it('throws NotFoundException when the pago does not belong to the despacho', async () => {
       repo.findOne.mockResolvedValue(null);

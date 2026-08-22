@@ -16,6 +16,8 @@ export class PagosController {
   @ApiQuery({ name: 'clienteId', required: false })
   @ApiQuery({ name: 'expedienteId', required: false })
   @ApiQuery({ name: 'estado', required: false })
+  @ApiQuery({ name: 'desde', required: false, description: 'Fecha de registro desde (YYYY-MM-DD)' })
+  @ApiQuery({ name: 'hasta', required: false, description: 'Fecha de registro hasta (YYYY-MM-DD)' })
   @ApiQuery({ name: 'pagina', required: false })
   @ApiQuery({ name: 'limite', required: false, description: 'Máximo 100' })
   findAll(@CurrentUser('despachoId') despachoId: number, @Query() query: any) {

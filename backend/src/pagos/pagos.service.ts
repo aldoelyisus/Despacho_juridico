@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Between, LessThanOrEqual, MoreThanOrEqual, Repository } from 'typeorm';
 import { Pago, EstadoPago } from './entities/pago.entity';
 import { PagoDetalle } from './entities/pago-detalle.entity';
 import { Servicio } from '../catalogos/entities/servicio.entity';
@@ -24,7 +24,7 @@ export class PagosService {
   ) {}
 
   async findAll(despachoId: number, query: any = {}) {
-    const { clienteId, expedienteId, estado } = query;
+    const { clienteId, expedienteId, estado, desde, hasta } = query;
     const pagina = Math.max(1, Number(query.pagina) || 1);
     const limite = Math.min(LIMITE_MAXIMO, Math.max(1, Number(query.limite) || 20));
 
@@ -32,6 +32,13 @@ export class PagosService {
     if (clienteId) where.clienteId = +clienteId;
     if (expedienteId) where.expedienteId = +expedienteId;
     if (estado) where.estado = estado;
+    if (desde && hasta) {
+      where.createdAt = Between(new Date(`${desde}T00:00:00`), new Date(`${hasta}T23:59:59.999`));
+    } else if (desde) {
+      where.createdAt = MoreThanOrEqual(new Date(`${desde}T00:00:00`));
+    } else if (hasta) {
+      where.createdAt = LessThanOrEqual(new Date(`${hasta}T23:59:59.999`));
+    }
 
     const [items, total] = await this.repo.findAndCount({
       where,

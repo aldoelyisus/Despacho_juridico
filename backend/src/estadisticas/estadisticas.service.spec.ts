@@ -180,6 +180,63 @@ describe('EstadisticasService', () => {
     });
   });
 
+  describe('getIngresosPeriodo — monto y numTickets combinando rollup + hoy en vivo', () => {
+    it('sums monto and numTickets from the rollup when the range ends before today', async () => {
+      const qb = createQueryBuilderMock({ getRawOne: jest.fn().mockResolvedValue({ total: '1000', numTickets: '4' }) });
+      ingresoDiarioRepo.createQueryBuilder.mockReturnValue(qb);
+
+      const result = await service.getIngresosPeriodo(1, new Date('2020-01-01'), new Date('2020-01-31'));
+      expect(result).toEqual({ monto: 1000, numTickets: 4 });
+      expect(pagoDetalleRepo.createQueryBuilder).not.toHaveBeenCalled();
+    });
+
+    it('adds the live monto and numTickets for today when the range includes it', async () => {
+      const rollupQb = createQueryBuilderMock({ getRawOne: jest.fn().mockResolvedValue({ total: '1000', numTickets: '4' }) });
+      const liveQb = createQueryBuilderMock({ getRawOne: jest.fn().mockResolvedValue({ total: '250', numTickets: '1' }) });
+      ingresoDiarioRepo.createQueryBuilder.mockReturnValue(rollupQb);
+      pagoDetalleRepo.createQueryBuilder.mockReturnValue(liveQb);
+
+      const hoy = new Date();
+      const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+      const result = await service.getIngresosPeriodo(1, inicioMes, hoy);
+
+      expect(result).toEqual({ monto: 1250, numTickets: 5 });
+    });
+  });
+
+  describe('getExpedientesEnFecha', () => {
+    it('computes live counts when the requested fecha is today', async () => {
+      const qb = createQueryBuilderMock({
+        getRawMany: jest.fn().mockResolvedValue([
+          { despachoId: '1', estado: EstadoExpediente.ACTIVO, cantidad: '3' },
+        ]),
+      });
+      expedienteRepo.createQueryBuilder.mockReturnValue(qb);
+
+      const result = await service.getExpedientesEnFecha(1, new Date());
+
+      expect(qb.where).toHaveBeenCalledWith('e.despachoId = :despachoId', { despachoId: 1 });
+      expect(result).toEqual([{ estado: EstadoExpediente.ACTIVO, cantidad: 3 }]);
+      expect(snapshotRepo.find).not.toHaveBeenCalled();
+    });
+
+    it('reads the stored snapshot row for a past fecha instead of computing live', async () => {
+      snapshotRepo.find.mockResolvedValue([{ estado: EstadoExpediente.GANADO, cantidad: 7 }]);
+
+      const result = await service.getExpedientesEnFecha(1, new Date('2020-01-15'));
+
+      expect(snapshotRepo.find).toHaveBeenCalledWith({ where: { despachoId: 1, fecha: '2020-01-15' } });
+      expect(result).toEqual([{ estado: EstadoExpediente.GANADO, cantidad: 7 }]);
+      expect(expedienteRepo.createQueryBuilder).not.toHaveBeenCalled();
+    });
+
+    it('returns an empty array for a past fecha with no snapshot ever recorded', async () => {
+      snapshotRepo.find.mockResolvedValue([]);
+      const result = await service.getExpedientesEnFecha(1, new Date('2019-06-01'));
+      expect(result).toEqual([]);
+    });
+  });
+
   describe('getIngresoMes', () => {
     it('reads the consolidated row for a past month without touching the daily tables', async () => {
       ingresoMensualRepo.findOne.mockResolvedValue({ id: 1, despachoId: 1, anio: 2020, mes: 1, montoTotal: 4200 });

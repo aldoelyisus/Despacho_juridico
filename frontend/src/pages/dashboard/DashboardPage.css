@@ -121,3 +121,61 @@
   .dashboard-grid-4,
   .dashboard-grid-2 { grid-template-columns: 1fr; }
 }
+
+/* ── Selector de período ───────────────────────────────────── */
+.year-stepper {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.year-stepper-value {
+  font-weight: 600;
+  font-size: 0.9rem;
+  min-width: 3.5ch;
+  text-align: center;
+}
+
+.periodo-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.periodo-pill {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 0.4rem 0.75rem;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.periodo-pill:hover {
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.periodo-pill.active {
+  border-color: var(--accent-400);
+  background: rgba(99, 102, 241, 0.12);
+  color: var(--accent-400);
+}
+
+.periodo-pill-sub {
+  font-size: 0.65rem;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.periodo-pill.active .periodo-pill-sub {
+  color: var(--accent-400);
+  opacity: 0.8;
+}

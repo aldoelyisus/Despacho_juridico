@@ -1,6 +1,7 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
-  Users, FolderOpen, CreditCard, TrendingUp,
+  Users, FolderOpen, CreditCard, TrendingUp, Receipt,
   CheckCircle, Clock, AlertCircle, Award
 } from 'lucide-react';
 import {
@@ -10,6 +11,8 @@ import {
 import { dashboardApi } from '../../api/dashboard.api';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import PeriodoSelector, { type PeriodoValue } from './PeriodoSelector';
+import DiaRangoSelector, { type DiaRangoValue } from './DiaRangoSelector';
 import './DashboardPage.css';
 
 const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#3b82f6', '#8b5cf6'];
@@ -23,18 +26,22 @@ const ESTADO_LABELS: Record<string, string> = {
   cancelado: 'Cancelado',
 };
 
-function StatCard({ title, value, icon: Icon, color, change, suffix = '' }: any) {
+function money(v: any) {
+  return `$${Number(v || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`;
+}
+
+function entero(v: any) {
+  return `${Number(v || 0).toLocaleString('es-MX')}`;
+}
+
+function StatCard({ title, value, icon: Icon, color, changeNode, suffix = '' }: any) {
   return (
     <div className="stat-card" style={{ '--gradient': color } as any}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
           <div className="stat-label">{title}</div>
           <div className="stat-value">{typeof value === 'number' ? value.toLocaleString('es-MX') : value}{suffix}</div>
-          {change !== undefined && (
-            <span className={`stat-change ${change >= 0 ? 'positive' : 'negative'}`}>
-              {change >= 0 ? '+' : ''}{change}% vs mes anterior
-            </span>
-          )}
+          {changeNode}
         </div>
         <div className="stat-icon" style={{ background: `${color}22`, color }}>
           <Icon size={22} />
@@ -44,10 +51,60 @@ function StatCard({ title, value, icon: Icon, color, change, suffix = '' }: any)
   );
 }
 
+/** Etiqueta de crecimiento (%, delta) contra el período anterior — usada en las tarjetas de comparación */
+function CrecimientoBadge({
+  crecimiento, label, formatDelta,
+}: {
+  crecimiento: { delta: number; porcentaje: number | null };
+  label: string;
+  formatDelta: (n: number) => string;
+}) {
+  if (crecimiento.porcentaje === null) {
+    return <span className="stat-change" style={{ color: 'var(--text-muted)' }}>Sin datos de {label} para comparar</span>;
+  }
+  const positivo = crecimiento.porcentaje >= 0;
+  const signo = positivo ? '+' : '-';
+  return (
+    <span className={`stat-change ${positivo ? 'positive' : 'negative'}`}>
+      {positivo ? '+' : ''}{crecimiento.porcentaje}% ({signo}{formatDelta(Math.abs(crecimiento.delta))}) {label}
+    </span>
+  );
+}
+
+function ultimoDiaDelMes(anio: number, mes: number) {
+  return new Date(anio, mes, 0).toISOString().split('T')[0];
+}
+
 export default function DashboardPage() {
+  const hoy = new Date();
+  const isoHoy = hoy.toISOString().split('T')[0];
+
+  const [periodo, setPeriodo] = useState<PeriodoValue>({ tipo: 'mes', anio: hoy.getFullYear(), valor: hoy.getMonth() + 1 });
+  const [diaRango, setDiaRango] = useState<DiaRangoValue>({ desde: isoHoy, hasta: isoHoy });
+
+  const handlePeriodoChange = (next: PeriodoValue) => {
+    setPeriodo(next);
+    if (next.tipo === 'mes' && next.valor) {
+      const esMesActual = next.anio === hoy.getFullYear() && next.valor === hoy.getMonth() + 1;
+      const dia = esMesActual ? isoHoy : ultimoDiaDelMes(next.anio, next.valor);
+      setDiaRango({ desde: dia, hasta: dia });
+    }
+  };
+
   const { data: kpis, isLoading } = useQuery({
     queryKey: ['dashboard-kpis'],
     queryFn: dashboardApi.kpis,
+  });
+
+  const { data: periodoData } = useQuery({
+    queryKey: ['dashboard-periodo', periodo],
+    queryFn: () => dashboardApi.resumenPeriodo(periodo.tipo, periodo.anio, periodo.valor),
+  });
+
+  const { data: diaData } = useQuery({
+    queryKey: ['dashboard-periodo-dia', diaRango],
+    queryFn: () => dashboardApi.resumenDia(diaRango.desde, diaRango.hasta),
+    enabled: periodo.tipo === 'mes',
   });
 
   const { data: ingresosHistorico } = useQuery({
@@ -60,9 +117,9 @@ export default function DashboardPage() {
     queryFn: dashboardApi.rendimientoUsuarios,
   });
 
-  const expedientesPieData = kpis?.expedientes?.byStatus?.map((s: any) => ({
+  const expedientesPieData = periodoData?.expedientes?.actual?.byStatus?.map((s: any) => ({
     name: ESTADO_LABELS[s.estado] || s.estado,
-    value: +s.total,
+    value: +s.cantidad,
   })) || [];
 
   if (isLoading) {
@@ -86,25 +143,96 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* KPI Cards */}
+      {/* Selector de período */}
+      <div className="card">
+        <PeriodoSelector value={periodo} onChange={handlePeriodoChange} />
+      </div>
+
+      {/* Comparación contra el período anterior */}
       <div className="dashboard-grid-4">
         <StatCard
-          title="Expedientes Activos"
-          value={kpis?.expedientes?.byStatus?.find((s: any) => s.estado === 'activo')?.total || 0}
-          icon={FolderOpen}
-          color="#6366f1"
+          title={`Ingresos — ${periodoData?.periodo?.etiqueta || ''}`}
+          value={money(periodoData?.ingresos?.actual?.monto)}
+          icon={CreditCard}
+          color="#f59e0b"
+          changeNode={periodoData && (
+            <CrecimientoBadge
+              crecimiento={periodoData.ingresos.crecimientoMonto}
+              label={`vs ${periodoData.periodoAnterior.etiqueta}`}
+              formatDelta={money}
+            />
+          )}
         />
+        <StatCard
+          title="Cobros registrados"
+          value={periodoData?.ingresos?.actual?.numTickets ?? 0}
+          icon={Receipt}
+          color="#6366f1"
+          changeNode={periodoData && (
+            <CrecimientoBadge
+              crecimiento={periodoData.ingresos.crecimientoTickets}
+              label={`vs ${periodoData.periodoAnterior.etiqueta}`}
+              formatDelta={entero}
+            />
+          )}
+        />
+        <StatCard
+          title="Expedientes al cierre"
+          value={periodoData?.expedientes?.actual?.total ?? 0}
+          icon={FolderOpen}
+          color="#8b5cf6"
+          changeNode={periodoData && (
+            <CrecimientoBadge
+              crecimiento={periodoData.expedientes.crecimientoTotal}
+              label={`vs ${periodoData.periodoAnterior.etiqueta}`}
+              formatDelta={entero}
+            />
+          )}
+        />
+        <StatCard
+          title="Ganados al cierre"
+          value={periodoData?.expedientes?.actual?.ganados ?? 0}
+          icon={Award}
+          color="#10b981"
+          changeNode={periodoData && (
+            <CrecimientoBadge
+              crecimiento={periodoData.expedientes.crecimientoGanados}
+              label={`vs ${periodoData.periodoAnterior.etiqueta}`}
+              formatDelta={entero}
+            />
+          )}
+        />
+      </div>
+
+      {/* Estadísticas de un día o rango de días específico (solo dentro de un mes) */}
+      {periodo.tipo === 'mes' && periodo.valor && (
+        <div className="card">
+          <h3 className="chart-title">Estadísticas del día</h3>
+          <DiaRangoSelector value={diaRango} onChange={setDiaRango} anio={periodo.anio} mes={periodo.valor} />
+          <div style={{ display: 'flex', gap: 'var(--sp-6)', marginTop: 'var(--sp-5)', flexWrap: 'wrap' }}>
+            <div>
+              <div className="stat-label">Ingresos ({diaRango.desde === diaRango.hasta ? diaRango.desde : `${diaRango.desde} al ${diaRango.hasta}`})</div>
+              <div className="stat-value" style={{ fontSize: '1.5rem' }}>{money(diaData?.ingresos?.monto)}</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{diaData?.ingresos?.numTickets ?? 0} cobro(s)</div>
+            </div>
+            <div>
+              <div className="stat-label">Expedientes al cierre de {diaRango.hasta}</div>
+              <div className="stat-value" style={{ fontSize: '1.5rem' }}>{diaData?.expedientes?.total ?? 0}</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                {diaData?.expedientes?.activos ?? 0} activo(s) · {diaData?.expedientes?.ganados ?? 0} ganado(s)
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* KPIs globales (no dependen del período seleccionado) */}
+      <div className="dashboard-grid-2">
         <StatCard
           title="Total Clientes"
           value={kpis?.clientes?.total || 0}
           icon={Users}
           color="#10b981"
-        />
-        <StatCard
-          title="Ingresos del Mes"
-          value={`$${Number(kpis?.financiero?.ingresosMes || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`}
-          icon={CreditCard}
-          color="#f59e0b"
         />
         <StatCard
           title="Tasa de Éxito"
@@ -139,7 +267,7 @@ export default function DashboardPage() {
 
         {/* Expedientes por estado (pie) */}
         <div className="card">
-          <h3 className="chart-title">Expedientes por Estado</h3>
+          <h3 className="chart-title">Expedientes por Estado — {periodoData?.periodo?.etiqueta || ''}</h3>
           {expedientesPieData.length > 0 ? (
             <ResponsiveContainer width="100%" height={240}>
               <PieChart>

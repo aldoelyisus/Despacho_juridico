@@ -29,11 +29,13 @@ export default function PagosPage() {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [pagina, setPagina] = useState(1);
   const [estadoFilter, setEstadoFilter] = useState('');
+  const [desde, setDesde] = useState('');
+  const [hasta, setHasta] = useState('');
 
   const { data: stats } = useQuery({ queryKey: ['pagos-stats'], queryFn: () => pagosApi.stats() });
   const { data } = useQuery({
-    queryKey: ['pagos', estadoFilter, pagina],
-    queryFn: () => pagosApi.list({ estado: estadoFilter || undefined, pagina, limite: 20 }),
+    queryKey: ['pagos', estadoFilter, desde, hasta, pagina],
+    queryFn: () => pagosApi.list({ estado: estadoFilter || undefined, desde: desde || undefined, hasta: hasta || undefined, pagina, limite: 20 }),
   });
 
   const invalidateAll = () => {
@@ -71,11 +73,30 @@ export default function PagosPage() {
 
       {/* Filters */}
       <div className="card" style={{ marginBottom: 'var(--sp-4)' }}>
-        <select className="form-select" style={{ maxWidth: 200 }} value={estadoFilter}
-          onChange={(e) => { setEstadoFilter(e.target.value); setPagina(1); }}>
-          <option value="">Todos los estados</option>
-          {Object.entries(ESTADO_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-        </select>
+        <div style={{ display: 'flex', gap: 'var(--sp-4)', flexWrap: 'wrap', alignItems: 'center' }}>
+          <select className="form-select" style={{ maxWidth: 200 }} value={estadoFilter}
+            onChange={(e) => { setEstadoFilter(e.target.value); setPagina(1); }}>
+            <option value="">Todos los estados</option>
+            {Object.entries(ESTADO_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)' }}>
+            <label style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Desde</label>
+            <input type="date" className="form-input" style={{ width: 155 }} value={desde}
+              max={hasta || undefined}
+              onChange={(e) => { setDesde(e.target.value); setPagina(1); }} />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)' }}>
+            <label style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Hasta</label>
+            <input type="date" className="form-input" style={{ width: 155 }} value={hasta}
+              min={desde || undefined}
+              onChange={(e) => { setHasta(e.target.value); setPagina(1); }} />
+          </div>
+          {(estadoFilter || desde || hasta) && (
+            <button className="btn btn-ghost btn-sm" onClick={() => { setEstadoFilter(''); setDesde(''); setHasta(''); setPagina(1); }}>
+              Limpiar
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Table */}
