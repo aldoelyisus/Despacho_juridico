@@ -8,6 +8,7 @@ import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 const emptyForm = {
   nombre: '', costoMensualidad: '', iva: '16', isPersonaMoral: true, isPersonaFisica: true,
   numeroUsuarios: '', precioUsuarioExtra: '', numeroExpedientes: '',
+  soporte: '', nivelDashboard: '', visibleEnLanding: false,
 };
 
 function PlanModal({ plan, onClose, onSuccess }: any) {
@@ -17,9 +18,12 @@ function PlanModal({ plan, onClose, onSuccess }: any) {
     iva: plan.iva,
     isPersonaMoral: plan.isPersonaMoral,
     isPersonaFisica: plan.isPersonaFisica,
-    numeroUsuarios: plan.numeroUsuarios,
+    numeroUsuarios: plan.numeroUsuarios ?? '',
     precioUsuarioExtra: plan.precioUsuarioExtra,
     numeroExpedientes: plan.numeroExpedientes ?? '',
+    soporte: plan.soporte || '',
+    nivelDashboard: plan.nivelDashboard || '',
+    visibleEnLanding: plan.visibleEnLanding || false,
   } : emptyForm);
   const set = (f: string) => (e: any) => setForm(p => ({ ...p, [f]: e.target.value }));
   const setBool = (f: string) => (e: any) => setForm(p => ({ ...p, [f]: e.target.checked }));
@@ -46,9 +50,12 @@ function PlanModal({ plan, onClose, onSuccess }: any) {
             ...form,
             costoMensualidad: Number(form.costoMensualidad),
             iva: Number(form.iva),
-            numeroUsuarios: Number(form.numeroUsuarios),
+            numeroUsuarios: form.numeroUsuarios === '' ? null : Number(form.numeroUsuarios),
             precioUsuarioExtra: Number(form.precioUsuarioExtra || 0),
             numeroExpedientes: form.numeroExpedientes === '' ? null : Number(form.numeroExpedientes),
+            soporte: form.soporte || null,
+            nivelDashboard: form.nivelDashboard || null,
+            visibleEnLanding: form.visibleEnLanding,
           });
         }}>
           <div className="modal-body">
@@ -66,8 +73,9 @@ function PlanModal({ plan, onClose, onSuccess }: any) {
                 <input className="form-input" type="number" step="0.01" required value={form.iva} onChange={set('iva')} />
               </div>
               <div className="form-group">
-                <label className="form-label">Usuarios incluidos *</label>
-                <input className="form-input" type="number" required value={form.numeroUsuarios} onChange={set('numeroUsuarios')} />
+                <label className="form-label">Usuarios incluidos</label>
+                <input className="form-input" type="number" min="0" placeholder="Ilimitados" value={form.numeroUsuarios} onChange={set('numeroUsuarios')} />
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 4 }}>Déjalo vacío para usuarios ilimitados</p>
               </div>
               <div className="form-group">
                 <label className="form-label">Precio por usuario extra ($)</label>
@@ -85,6 +93,25 @@ function PlanModal({ plan, onClose, onSuccess }: any) {
               <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <input type="checkbox" checked={form.isPersonaMoral} onChange={setBool('isPersonaMoral')} />
                 <label className="form-label" style={{ margin: 0 }}>Disponible para persona moral</label>
+              </div>
+
+              <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                <div className="divider" />
+                <label className="form-label" style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)' }}>
+                  Landing pública
+                </label>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Nivel de soporte</label>
+                <input className="form-input" placeholder="Ej: Soporte prioritario" value={form.soporte} onChange={set('soporte')} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Nivel de dashboard</label>
+                <input className="form-input" placeholder="Ej: Dashboard avanzado" value={form.nivelDashboard} onChange={set('nivelDashboard')} />
+              </div>
+              <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: 8, gridColumn: '1 / -1' }}>
+                <input type="checkbox" checked={form.visibleEnLanding} onChange={setBool('visibleEnLanding')} />
+                <label className="form-label" style={{ margin: 0 }}>Visible en la sección de precios de la landing pública</label>
               </div>
             </div>
           </div>
@@ -144,12 +171,13 @@ export default function RootPlanesPage() {
                 <th>Precio usuario extra</th>
                 <th>Expedientes incluidos</th>
                 <th>Tipo persona</th>
+                <th>Landing</th>
                 <th>Acciones</th>
               </tr>
             </thead>
             <tbody>
               {isLoading && (
-                <tr><td colSpan={8} style={{ textAlign: 'center', padding: 'var(--sp-8)' }}><div className="spinner" /></td></tr>
+                <tr><td colSpan={9} style={{ textAlign: 'center', padding: 'var(--sp-8)' }}><div className="spinner" /></td></tr>
               )}
               {planes?.map((p: any) => (
                 <tr key={p.id}>
@@ -158,12 +186,17 @@ export default function RootPlanesPage() {
                     ${Number(p.costoMensualidad).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                   </td>
                   <td>{Number(p.iva)}%</td>
-                  <td>{p.numeroUsuarios}</td>
+                  <td>{p.numeroUsuarios ?? <span style={{ color: 'var(--text-muted)' }}>Ilimitados</span>}</td>
                   <td>${Number(p.precioUsuarioExtra).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
                   <td>{p.numeroExpedientes ?? <span style={{ color: 'var(--text-muted)' }}>Ilimitados</span>}</td>
                   <td style={{ fontSize: '0.8rem' }}>
                     {p.isPersonaFisica && <span className="badge badge-accent" style={{ marginRight: 4 }}>Física</span>}
                     {p.isPersonaMoral && <span className="badge badge-accent">Moral</span>}
+                  </td>
+                  <td>
+                    {p.visibleEnLanding
+                      ? <span className="badge badge-success">Visible</span>
+                      : <span className="badge badge-muted">Oculto</span>}
                   </td>
                   <td>
                     <div style={{ display: 'flex', gap: 'var(--sp-2)' }}>
@@ -188,7 +221,7 @@ export default function RootPlanesPage() {
                 </tr>
               ))}
               {!isLoading && !planes?.length && (
-                <tr><td colSpan={8}>
+                <tr><td colSpan={9}>
                   <div className="empty-state">
                     <div className="empty-icon"><Package size={40} /></div>
                     <h3>Sin planes</h3>

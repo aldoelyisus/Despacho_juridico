@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Users, FolderOpen, Calendar,
   CreditCard, UserCog, BookOpen, Settings,
   ChevronLeft, Scale, LogOut, Activity, Building2,
-  DollarSign, Crown, Tag, Package,
+  DollarSign, Crown, Tag, Package, MessageSquare,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { despachoApi } from '../../api/despacho.api';
@@ -29,6 +29,7 @@ const rootNavItems = [
   { to: '/root/despachos',     icon: Building2,       label: 'Despachos' },
   { to: '/root/planes',        icon: Package,         label: 'Planes' },
   { to: '/root/mensualidades', icon: DollarSign,      label: 'Mensualidades' },
+  { to: '/root/landing',       icon: MessageSquare,   label: 'Landing' },
   { to: '/root/auditoria',     icon: Activity,        label: 'Auditoría' },
 ];
 

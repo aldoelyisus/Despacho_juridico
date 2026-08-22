@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './stores/authStore';
 import Layout from './components/layout/Layout';
+import LandingPage from './pages/landing/LandingPage';
 import LoginPage from './pages/auth/LoginPage';
 import DashboardPage from './pages/dashboard/DashboardPage';
 import ClientesPage from './pages/clientes/ClientesPage';
@@ -18,8 +19,18 @@ import RootDespachosPage from './pages/root/RootDespachosPage';
 import RootMensualidadesPage from './pages/root/RootMensualidadesPage';
 import RootPlanesPage from './pages/root/RootPlanesPage';
 import RootAuditoriaPage from './pages/root/RootAuditoriaPage';
+import RootLandingPage from './pages/root/RootLandingPage';
 import PerfilPage from './pages/perfil/PerfilPage';
 import DescuentosPage from './pages/descuentos/DescuentosPage';
+
+function PublicRoute({ children }: { children: React.ReactNode }) {
+  const { token, usuario } = useAuthStore();
+  if (token) {
+    const esRoot = usuario?.rol?.nombre?.toLowerCase() === 'root';
+    return <Navigate to={esRoot ? '/root' : '/dashboard'} replace />;
+  }
+  return <>{children}</>;
+}
 
 function RootRoute({ children }: { children: React.ReactNode }) {
   const { token, usuario } = useAuthStore();
@@ -38,7 +49,8 @@ function NormalRoute({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <Routes>
-      {/* Public */}
+      {/* Pública — landing de ventas */}
+      <Route path="/" element={<PublicRoute><LandingPage /></PublicRoute>} />
       <Route path="/login" element={<LoginPage />} />
 
       {/* ROOT — panel SaaS exclusivo */}
@@ -51,32 +63,30 @@ export default function App() {
         <Route path="despachos"     element={<RootDespachosPage />} />
         <Route path="planes"       element={<RootPlanesPage />} />
         <Route path="mensualidades" element={<RootMensualidadesPage />} />
+        <Route path="landing"       element={<RootLandingPage />} />
         <Route path="auditoria"     element={<RootAuditoriaPage />} />
         <Route path="perfil"        element={<PerfilPage />} />
       </Route>
 
-      {/* NORMAL — usuarios de despacho */}
-      <Route
-        path="/"
-        element={<NormalRoute><Layout /></NormalRoute>}
-      >
-        <Route index element={<Navigate to="/dashboard" replace />} />
-        <Route path="dashboard"        element={<DashboardPage />} />
-        <Route path="clientes"         element={<ClientesPage />} />
-        <Route path="clientes/:id"     element={<ClienteDetallePage />} />
-        <Route path="expedientes"      element={<ExpedientesPage />} />
-        <Route path="expedientes/:id"  element={<ExpedienteDetallePage />} />
-        <Route path="agenda"           element={<AgendaPage />} />
-        <Route path="pagos"            element={<PagosPage />} />
-        <Route path="usuarios"         element={<UsuariosPage />} />
-        <Route path="catalogos"        element={<CatalogosPage />} />
-        <Route path="descuentos"       element={<DescuentosPage />} />
-        <Route path="auditoria"        element={<AuditoriaPage />} />
-        <Route path="configuracion"    element={<ConfiguracionPage />} />
-        <Route path="perfil"           element={<PerfilPage />} />
+      {/* NORMAL — usuarios de despacho. Layout route sin path propio: las URLs de abajo son
+          absolutas y no cambian, solo se comparte el wrapper NormalRoute+Layout. */}
+      <Route element={<NormalRoute><Layout /></NormalRoute>}>
+        <Route path="/dashboard"        element={<DashboardPage />} />
+        <Route path="/clientes"         element={<ClientesPage />} />
+        <Route path="/clientes/:id"     element={<ClienteDetallePage />} />
+        <Route path="/expedientes"      element={<ExpedientesPage />} />
+        <Route path="/expedientes/:id"  element={<ExpedienteDetallePage />} />
+        <Route path="/agenda"           element={<AgendaPage />} />
+        <Route path="/pagos"            element={<PagosPage />} />
+        <Route path="/usuarios"         element={<UsuariosPage />} />
+        <Route path="/catalogos"        element={<CatalogosPage />} />
+        <Route path="/descuentos"       element={<DescuentosPage />} />
+        <Route path="/auditoria"        element={<AuditoriaPage />} />
+        <Route path="/configuracion"    element={<ConfiguracionPage />} />
+        <Route path="/perfil"           element={<PerfilPage />} />
       </Route>
 
-      <Route path="*" element={<Navigate to="/login" replace />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

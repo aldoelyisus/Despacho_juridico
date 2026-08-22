@@ -78,6 +78,20 @@ describe('UsuariosService', () => {
       ).rejects.toThrow(HttpException);
     });
 
+    it('allows unlimited users when the plan has no numeroUsuarios limit set (null)', async () => {
+      rolRepo.findOne.mockResolvedValue({ id: 2, nombre: 'abogado' });
+      usuarioRepo.findOne.mockResolvedValue(null);
+      despachoRepo.findOne.mockResolvedValue({
+        id: 1,
+        plan: { numeroUsuarios: null, precioUsuarioExtra: 100 },
+      });
+      usuarioRepo.count.mockResolvedValue(999);
+
+      await expect(
+        service.create({ email: 'nuevo@a.com', password: 'Str0ng!Passw0rd', rolId: 2 } as any, 1),
+      ).resolves.toBeDefined();
+    });
+
     it('creates the user with debeCambiarPassword=true and strips sensitive fields from the response', async () => {
       rolRepo.findOne.mockResolvedValue({ id: 2, nombre: 'abogado' });
       usuarioRepo.findOne.mockResolvedValue(null);

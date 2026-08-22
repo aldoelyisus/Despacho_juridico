@@ -64,7 +64,7 @@ export class UsuariosService {
     accion: 'agregar este usuario' | 'reactivar a este usuario',
   ): Promise<{ despacho: Despacho | null; esUsuarioExtra: boolean }> {
     const despacho = await this.despachoRepo.findOne({ where: { id: despachoId }, relations: { plan: true } });
-    if (!despacho?.plan) return { despacho, esUsuarioExtra: false };
+    if (!despacho?.plan || despacho.plan.numeroUsuarios === null) return { despacho, esUsuarioExtra: false };
 
     const usuariosActuales = await this.repo.count({ where: { despachoId, activo: true } });
     if (usuariosActuales + 1 > despacho.plan.numeroUsuarios) {
