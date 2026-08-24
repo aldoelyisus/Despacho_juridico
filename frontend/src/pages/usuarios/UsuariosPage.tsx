@@ -9,6 +9,7 @@ import { usuariosApi } from '../../api/usuarios.api';
 import { evaluatePasswordPolicy, generateStrongPassword } from '../../utils/password';
 import { downloadCsv } from '../../utils/csv';
 import PasswordChecklist from '../../components/PasswordChecklist';
+import ModalErrorBanner from '../../components/ModalErrorBanner';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 
 // ── Modal: credenciales generadas (crear / restablecer) ────────────────────
@@ -70,9 +71,10 @@ export default function UsuariosPage() {
   const [showPass, setShowPass] = useState(false);
   const [form, setForm] = useState({ nombre: '', apellido: '', email: '', password: '', rolId: '', telefono: '' });
   const [credenciales, setCredenciales] = useState<{ email: string; password: string } | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
   const { askConfirm, confirmDialog } = useConfirmDialog();
 
-  const { data: usuarios } = useQuery({ queryKey: ['usuarios'], queryFn: usuariosApi.list });
+  const { data: usuarios, isLoading } = useQuery({ queryKey: ['usuarios'], queryFn: usuariosApi.list });
   const { data: roles } = useQuery({ queryKey: ['roles'], queryFn: usuariosApi.roles });
 
   const createM = useMutation({
@@ -81,6 +83,7 @@ export default function UsuariosPage() {
       qc.invalidateQueries({ queryKey: ['usuarios'] });
       qc.invalidateQueries({ queryKey: ['usuarios-list'] });
       setModalOpen(false);
+      setCreateError(null);
       toast.success('Usuario creado');
       setCredenciales({ email: form.email, password: form.password });
     },
@@ -95,7 +98,7 @@ export default function UsuariosPage() {
         });
         return;
       }
-      toast.error(info?.message || 'Error al crear usuario');
+      setCreateError(info?.message || 'Error al crear usuario');
     },
   });
 
@@ -142,7 +145,7 @@ export default function UsuariosPage() {
           <h1 className="page-title">Usuarios</h1>
           <p className="page-subtitle">{usuarios?.length || 0} usuarios en el despacho</p>
         </div>
-        <button id="nuevo-usuario-btn" className="btn btn-primary" onClick={() => { resetForm(); setModalOpen(true); }}>
+        <button id="nuevo-usuario-btn" className="btn btn-primary" onClick={() => { resetForm(); setCreateError(null); setModalOpen(true); }}>
           <Plus size={16} /> Nuevo Usuario
         </button>
       </div>
@@ -160,7 +163,11 @@ export default function UsuariosPage() {
             </tr>
           </thead>
           <tbody>
-            {!usuarios?.length ? (
+            {isLoading ? (
+              <tr><td colSpan={6} style={{ textAlign: 'center', padding: 'var(--sp-8)' }}>
+                <div className="spinner" />
+              </td></tr>
+            ) : !usuarios?.length ? (
               <tr><td colSpan={6}>
                 <div className="empty-state">
                   <UserCog size={40} style={{ opacity: 0.3 }} />
@@ -216,7 +223,16 @@ export default function UsuariosPage() {
                     </button>
                     <button
                       className="btn btn-ghost btn-icon btn-icon-sm"
-                      onClick={() => toggleM.mutate({ id: u.id })}
+                      onClick={() => {
+                        if (!u.activo) { toggleM.mutate({ id: u.id }); return; }
+                        askConfirm({
+                          title: 'Desactivar usuario',
+                          message: `¿Desactivar a ${u.nombre} ${u.apellido}? Perderá acceso al sistema de inmediato.`,
+                          confirmLabel: 'Desactivar',
+                          danger: true,
+                          onConfirm: () => toggleM.mutate({ id: u.id }),
+                        });
+                      }}
                       data-tooltip={u.activo ? 'Desactivar' : 'Activar'}
                     >
                       {u.activo
@@ -254,8 +270,9 @@ export default function UsuariosPage() {
               <h3>Nuevo Usuario</h3>
               <button className="btn btn-ghost btn-icon" onClick={() => setModalOpen(false)}><X size={18} /></button>
             </div>
-            <form onSubmit={(e) => { e.preventDefault(); createM.mutate(form); }}>
+            <form onSubmit={(e) => { e.preventDefault(); setCreateError(null); createM.mutate(form); }}>
               <div className="modal-body">
+                <ModalErrorBanner message={createError} />
                 <div className="form-grid-2">
                   <div className="form-group">
                     <label className="form-label">Nombre *</label>

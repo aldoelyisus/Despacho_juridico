@@ -4,6 +4,7 @@ import { X, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { clientesApi } from '../../api/clientes.api';
 import { getErrorMessage } from '../../utils/errors';
+import ModalErrorBanner from '../../components/ModalErrorBanner';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -37,6 +38,7 @@ export default function ClienteModal({ cliente, onClose, onSuccess }: Props) {
     estado: cliente?.estado || '',
     notas: cliente?.notas || '',
   });
+  const [error, setError] = useState<string | null>(null);
 
   const set = (f: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm((prev) => ({ ...prev, [f]: e.target.value }));
@@ -48,13 +50,14 @@ export default function ClienteModal({ cliente, onClose, onSuccess }: Props) {
       toast.success(isEdit ? 'Cliente actualizado' : 'Cliente registrado');
       onSuccess();
     },
-    onError: (err: any) => toast.error(getErrorMessage(err, 'Error al guardar el cliente')),
+    onError: (err: any) => setError(getErrorMessage(err, 'Error al guardar el cliente')),
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const error = validar(form);
-    if (error) { toast.error(error); return; }
+    setError(null);
+    const validacion = validar(form);
+    if (validacion) { setError(validacion); return; }
     mutation.mutate(form);
   };
 
@@ -67,6 +70,7 @@ export default function ClienteModal({ cliente, onClose, onSuccess }: Props) {
         </div>
         <form onSubmit={handleSubmit}>
           <div className="modal-body">
+            <ModalErrorBanner message={error} />
             <div className="form-grid-2">
               <div className="form-group">
                 <label className="form-label">Nombre *</label>
@@ -78,7 +82,7 @@ export default function ClienteModal({ cliente, onClose, onSuccess }: Props) {
               </div>
               <div className="form-group">
                 <label className="form-label">Email</label>
-                <input id="cl-email" type="email" className="form-input" value={form.email} onChange={set('email')} />                
+                <input id="cl-email" type="email" className="form-input" value={form.email} onChange={set('email')} />
               </div>
               <div className="form-group">
                 <label className="form-label">Teléfono</label>

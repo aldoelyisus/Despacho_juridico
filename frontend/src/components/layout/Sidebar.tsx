@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { despachoApi } from '../../api/despacho.api';
+import { authApi } from '../../api/auth.api';
 import './Sidebar.css';
 
 const normalNavItems = [
@@ -44,7 +45,11 @@ export default function Sidebar({ collapsed, onToggle }: Props) {
   const isRoot = usuario?.rol?.nombre?.toLowerCase() === 'root';
   const navItems = isRoot ? rootNavItems : normalNavItems;
 
-  const handleLogout = () => { logout(); navigate('/login'); };
+  const handleLogout = async () => {
+    await authApi.logout().catch(() => {}); // borra las cookies httpOnly del lado servidor
+    logout();
+    navigate('/login');
+  };
 
   return (
     <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>

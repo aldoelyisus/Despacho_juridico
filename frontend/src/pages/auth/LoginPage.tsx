@@ -121,7 +121,7 @@ export default function LoginPage() {
       setStep('2fa');
       return;
     }
-    setAuth(data.accessToken, data.refreshToken, data.usuario);
+    setAuth(data.usuario);
     const isRoot = data.usuario?.rol?.nombre?.toLowerCase() === 'root';
     navigate(isRoot ? '/root' : '/dashboard');
     toast.success(`¡Bienvenido, ${data.usuario.nombre}!`);

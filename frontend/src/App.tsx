@@ -1,5 +1,7 @@
+import { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './stores/authStore';
+import { authApi } from './api/auth.api';
 import Layout from './components/layout/Layout';
 import LandingPage from './pages/landing/LandingPage';
 import LoginPage from './pages/auth/LoginPage';
@@ -23,9 +25,19 @@ import RootLandingPage from './pages/root/RootLandingPage';
 import PerfilPage from './pages/perfil/PerfilPage';
 import DescuentosPage from './pages/descuentos/DescuentosPage';
 
+function FullPageSpinner() {
+  return (
+    <div className="dashboard-loading">
+      <div className="spinner spinner-lg" />
+    </div>
+  );
+}
+
+// No bloquea la landing con un spinner mientras se confirma la sesión — la inmensa mayoría de
+// las visitas son anónimas. Si resulta que sí hay sesión activa, redirige en cuanto se sepa.
 function PublicRoute({ children }: { children: React.ReactNode }) {
-  const { token, usuario } = useAuthStore();
-  if (token) {
+  const { sessionChecked, isAuthenticated, usuario } = useAuthStore();
+  if (sessionChecked && isAuthenticated) {
     const esRoot = usuario?.rol?.nombre?.toLowerCase() === 'root';
     return <Navigate to={esRoot ? '/root' : '/dashboard'} replace />;
   }
@@ -33,20 +45,28 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 }
 
 function RootRoute({ children }: { children: React.ReactNode }) {
-  const { token, usuario } = useAuthStore();
-  if (!token) return <Navigate to="/login" replace />;
+  const { sessionChecked, isAuthenticated, usuario } = useAuthStore();
+  if (!sessionChecked) return <FullPageSpinner />;
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
   if (usuario?.rol?.nombre?.toLowerCase() !== 'root') return <Navigate to="/dashboard" replace />;
   return <>{children}</>;
 }
 
 function NormalRoute({ children }: { children: React.ReactNode }) {
-  const { token, usuario } = useAuthStore();
-  if (!token) return <Navigate to="/login" replace />;
+  const { sessionChecked, isAuthenticated, usuario } = useAuthStore();
+  if (!sessionChecked) return <FullPageSpinner />;
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
   if (usuario?.rol?.nombre?.toLowerCase() === 'root') return <Navigate to="/root" replace />;
   return <>{children}</>;
 }
 
 export default function App() {
+  useEffect(() => {
+    authApi.me()
+      .then(({ usuario }) => useAuthStore.getState().setSessionChecked(usuario))
+      .catch(() => useAuthStore.getState().setSessionChecked(null));
+  }, []);
+
   return (
     <Routes>
       {/* Pública — landing de ventas */}

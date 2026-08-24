@@ -3,12 +3,30 @@ import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
 import { AuthService } from './auth/auth.service';
 import { EstadisticasService } from './estadisticas/estadisticas.service';
 import { join } from 'path';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  // Necesario para leer las cookies httpOnly de sesión (accessToken/refreshToken)
+  app.use(cookieParser());
+
+  // Encabezados HTTP básicos de seguridad (X-Content-Type-Options, X-Frame-Options,
+  // Strict-Transport-Security, Referrer-Policy, etc.). El frontend vive en otro dominio y
+  // consume esta API + carga imágenes de /uploads/ directo, así que se desactiva la CSP
+  // (necesitaría afinarse aparte para no romper Swagger) y se permite el acceso cross-origin
+  // a los recursos estáticos.
+  app.use(
+    helmet({
+      contentSecurityPolicy: false,
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+      crossOriginEmbedderPolicy: false,
+    }),
+  );
 
   // CORS
   app.enableCors({

@@ -4,7 +4,12 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { Request } from 'express';
 import { Usuario } from '../../usuarios/entities/usuario.entity';
+
+/** Prioriza la cookie httpOnly (flujo real de la app); el header Authorization queda como
+ *  fallback para poder probar endpoints manualmente desde Swagger UI. */
+const cookieExtractor = (req: Request): string | null => req?.cookies?.accessToken || null;
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -14,7 +19,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     private usuarioRepo: Repository<Usuario>,
   ) {
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest: ExtractJwt.fromExtractors([cookieExtractor, ExtractJwt.fromAuthHeaderAsBearerToken()]),
       ignoreExpiration: false,
       secretOrKey: config.get('JWT_SECRET', 'fallback_secret'),
     });

@@ -254,7 +254,7 @@ function ServiciosTab() {
   const [editServicio, setEditServicio] = useState<any>(null);
   const { askConfirm, confirmDialog } = useConfirmDialog();
 
-  const { data: servicios } = useQuery({ queryKey: ['servicios'], queryFn: catalogosApi.servicios });
+  const { data: servicios, isLoading } = useQuery({ queryKey: ['servicios'], queryFn: catalogosApi.servicios });
 
   const deleteM = useMutation({
     mutationFn: (id: number) => catalogosApi.deleteServicio(id),
@@ -275,7 +275,9 @@ function ServiciosTab() {
         </button>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-2)' }}>
-        {servicios?.map((s: any) => (
+        {isLoading ? (
+          <div style={{ textAlign: 'center', padding: 'var(--sp-6)' }}><div className="spinner" /></div>
+        ) : servicios?.map((s: any) => (
           <div key={s.id} style={{
             display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', padding: 'var(--sp-3)',
             background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)',
@@ -304,7 +306,7 @@ function ServiciosTab() {
             </button>
           </div>
         ))}
-        {!servicios?.length && <div className="empty-state"><BookOpen size={28} style={{ opacity: 0.3 }} /><p>Sin servicios configurados</p></div>}
+        {!isLoading && !servicios?.length && <div className="empty-state"><BookOpen size={28} style={{ opacity: 0.3 }} /><p>Sin servicios configurados</p></div>}
       </div>
 
       {modalOpen && (

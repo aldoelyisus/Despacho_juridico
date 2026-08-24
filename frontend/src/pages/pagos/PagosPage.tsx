@@ -33,7 +33,7 @@ export default function PagosPage() {
   const [hasta, setHasta] = useState('');
 
   const { data: stats } = useQuery({ queryKey: ['pagos-stats'], queryFn: () => pagosApi.stats() });
-  const { data } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['pagos', estadoFilter, desde, hasta, pagina],
     queryFn: () => pagosApi.list({ estado: estadoFilter || undefined, desde: desde || undefined, hasta: hasta || undefined, pagina, limite: 20 }),
   });
@@ -117,7 +117,11 @@ export default function PagosPage() {
             </tr>
           </thead>
           <tbody>
-            {data?.items?.length === 0 ? (
+            {isLoading ? (
+              <tr><td colSpan={10} style={{ textAlign: 'center', padding: 'var(--sp-8)' }}>
+                <div className="spinner" />
+              </td></tr>
+            ) : data?.items?.length === 0 ? (
               <tr><td colSpan={10}>
                 <div className="empty-state">
                   <CreditCard size={40} style={{ opacity: 0.3 }} />

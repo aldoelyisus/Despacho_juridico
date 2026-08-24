@@ -10,6 +10,7 @@ import { Plus, X, Loader2, Users, UserCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { agendaApi } from '../../api/agenda.api';
 import { usuariosApi } from '../../api/usuarios.api';
+import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import './AgendaPage.css';
 
 const TIPOS = [
@@ -33,8 +34,9 @@ export default function AgendaPage() {
   const [selectedEvent, setSelectedEvent] = useState<any>(null);
   const [form, setForm] = useState(FORM_INIT);
   const [participanteIds, setParticipanteIds] = useState<number[]>([]);
+  const { askConfirm, confirmDialog } = useConfirmDialog();
 
-  const { data: eventos } = useQuery({
+  const { data: eventos, isLoading } = useQuery({
     queryKey: ['agenda'],
     queryFn: () => agendaApi.list(),
     refetchInterval: 60000,
@@ -113,27 +115,40 @@ export default function AgendaPage() {
         </button>
       </div>
 
-      <div className="card agenda-calendar-card">
-        <FullCalendar
-          ref={calendarRef}
-          plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}
-          initialView="dayGridMonth"
-          locale={esLocale}
-          events={calendarEvents}
-          headerToolbar={{
-            left: 'prev,next today',
-            center: 'title',
-            right: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek',
-          }}
-          buttonText={{ today: 'Hoy', month: 'Mes', week: 'Semana', day: 'Día', list: 'Lista' }}
-          height="auto"
-          dateClick={openNew}
-          eventClick={(info) => setSelectedEvent(info.event.extendedProps)}
-          editable={false}
-          selectable
-          nowIndicator
-        />
-      </div>
+      {isLoading ? (
+        <div className="card agenda-calendar-card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 400 }}>
+          <div className="spinner spinner-lg" />
+        </div>
+      ) : (
+        <>
+          {eventos?.length === 0 && (
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.8125rem', marginBottom: 'var(--sp-3)' }}>
+              No tienes eventos programados. Haz clic en una fecha del calendario para crear el primero.
+            </p>
+          )}
+          <div className="card agenda-calendar-card">
+            <FullCalendar
+              ref={calendarRef}
+              plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}
+              initialView="dayGridMonth"
+              locale={esLocale}
+              events={calendarEvents}
+              headerToolbar={{
+                left: 'prev,next today',
+                center: 'title',
+                right: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek',
+              }}
+              buttonText={{ today: 'Hoy', month: 'Mes', week: 'Semana', day: 'Día', list: 'Lista' }}
+              height="auto"
+              dateClick={openNew}
+              eventClick={(info) => setSelectedEvent(info.event.extendedProps)}
+              editable={false}
+              selectable
+              nowIndicator
+            />
+          </div>
+        </>
+      )}
 
       {/* ── Detalle de evento ── */}
       {selectedEvent && (
@@ -178,7 +193,18 @@ export default function AgendaPage() {
               </div>
             </div>
             <div className="modal-footer">
-              <button className="btn btn-danger btn-sm" onClick={() => deleteM.mutate(selectedEvent.id)}>Eliminar</button>
+              <button
+                className="btn btn-danger btn-sm"
+                onClick={() => askConfirm({
+                  title: 'Eliminar evento',
+                  message: `¿Eliminar "${selectedEvent.titulo}" de la agenda? Esta acción no se puede deshacer.`,
+                  confirmLabel: 'Eliminar',
+                  danger: true,
+                  onConfirm: () => deleteM.mutate(selectedEvent.id),
+                })}
+              >
+                Eliminar
+              </button>
               <button className="btn btn-secondary btn-sm" onClick={() => setSelectedEvent(null)}>Cerrar</button>
             </div>
           </div>
@@ -237,7 +263,7 @@ export default function AgendaPage() {
 
                   {/* PARTICIPANTES */}
                   <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                    <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <label className="form-label" htmlFor="ev-participantes" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <Users size={14} /> Invitar participantes
                       <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: '0.8rem' }}>
                         — (tú siempre serás incluido)
@@ -297,6 +323,7 @@ export default function AgendaPage() {
           </div>
         </div>
       )}
+      {confirmDialog}
     </div>
   );
 }

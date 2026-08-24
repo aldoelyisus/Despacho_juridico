@@ -12,10 +12,12 @@ interface Usuario {
 }
 
 interface AuthState {
-  token: string | null;
-  refreshToken: string | null;
   usuario: Usuario | null;
-  setAuth: (token: string, refreshToken: string, usuario: Usuario) => void;
+  isAuthenticated: boolean;
+  /** true una vez que /auth/me ya respondió (éxito o 401) al cargar la app */
+  sessionChecked: boolean;
+  setAuth: (usuario: Usuario) => void;
+  setSessionChecked: (usuario: Usuario | null) => void;
   logout: () => void;
   updateUsuario: (usuario: Partial<Usuario>) => void;
 }
@@ -23,22 +25,20 @@ interface AuthState {
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
-      token: null,
-      refreshToken: null,
       usuario: null,
-      setAuth: (token, refreshToken, usuario) =>
-        set({ token, refreshToken, usuario }),
-      logout: () => set({ token: null, refreshToken: null, usuario: null }),
+      isAuthenticated: false,
+      sessionChecked: false,
+      setAuth: (usuario) => set({ usuario, isAuthenticated: true, sessionChecked: true }),
+      setSessionChecked: (usuario) => set({ usuario, isAuthenticated: !!usuario, sessionChecked: true }),
+      logout: () => set({ usuario: null, isAuthenticated: false }),
       updateUsuario: (updates) =>
         set((s) => ({ usuario: s.usuario ? { ...s.usuario, ...updates } : null })),
     }),
     {
       name: 'despacho-auth',
-      partialize: (state) => ({
-        token: state.token,
-        refreshToken: state.refreshToken,
-        usuario: state.usuario,
-      }),
+      // Solo se persiste el perfil (no sensible) para pintar la UI sin parpadeo mientras se
+      // confirma la sesión con /auth/me — los tokens ya no viven en el cliente, son cookies httpOnly.
+      partialize: (state) => ({ usuario: state.usuario }),
     },
   ),
 );

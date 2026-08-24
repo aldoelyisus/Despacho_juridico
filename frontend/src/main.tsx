@@ -31,8 +31,10 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
               borderRadius: '10px',
               fontSize: '0.875rem',
             },
-            success: { iconTheme: { primary: '#10b981', secondary: '#fff' } },
-            error:   { iconTheme: { primary: '#ef4444', secondary: '#fff' } },
+            // Un error necesita más tiempo de lectura que un simple "listo" — que no se
+            // desvanezca antes de que el usuario alcance a entender qué pasó.
+            success: { duration: 2500, iconTheme: { primary: '#10b981', secondary: '#fff' } },
+            error:   { duration: 6000, iconTheme: { primary: '#ef4444', secondary: '#fff' } },
           }}
         />
       </BrowserRouter>

@@ -4,11 +4,12 @@ export const authApi = {
   login: (email: string, password: string) =>
     api.post('/auth/login', { email, password }).then((r) => r.data),
 
-  refresh: (refreshToken: string) =>
-    api.post('/auth/refresh', { refreshToken }).then((r) => r.data),
-
   changePasswordRequired: (tempToken: string, newPassword: string) =>
     api.post('/auth/change-password-required', { tempToken, newPassword }).then((r) => r.data),
+
+  me: () => api.get('/auth/me').then((r) => r.data),
+
+  logout: () => api.post('/auth/logout').then((r) => r.data),
 
   // 2FA
   verify2FA: (tempToken: string, code: string) =>

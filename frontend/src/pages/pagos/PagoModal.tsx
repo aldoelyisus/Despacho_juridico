@@ -283,6 +283,7 @@ export default function PagoModal({ onClose, onSuccess, expedienteContext }: Pro
               <div className="form-group">
                 <label className="form-label">Notas</label>
                 <input id="pago-notas" type="text" className="form-input" value={form.notas}
+                  placeholder="Ej: Pago a 3 meses, pendiente factura..."
                   onChange={(e) => setForm(f => ({ ...f, notas: e.target.value }))} />
               </div>
 

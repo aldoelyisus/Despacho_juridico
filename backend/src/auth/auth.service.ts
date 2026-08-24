@@ -380,6 +380,17 @@ export class AuthService {
     };
   }
 
+  /** Usuario de la sesión actual, con el mismo shape que devuelve login/2FA (incluye despacho completo) */
+  async getUsuarioActual(userId: number) {
+    const usuario = await this.usuarioRepo.findOne({
+      where: { id: userId, activo: true },
+      relations: { rol: true, despacho: true },
+    });
+    if (!usuario) throw new UnauthorizedException('Usuario no encontrado');
+    const isRoot = usuario.rol?.nombre?.toLowerCase() === 'root';
+    return this.buildUsuarioPayload(usuario, isRoot);
+  }
+
   // ── HELPERS ───────────────────────────────────────────────────────────────
   private generateBackupCodes(): string[] {
     const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sin caracteres ambiguos

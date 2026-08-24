@@ -7,6 +7,7 @@ import { clientesApi } from '../../api/clientes.api';
 import ClienteModal from './ClienteModal';
 import Pagination from '../../components/Pagination';
 import { getErrorMessage } from '../../utils/errors';
+import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 
 export default function ClientesPage() {
   const navigate = useNavigate();
@@ -15,6 +16,7 @@ export default function ClientesPage() {
   const [pagina, setPagina] = useState(1);
   const [modalOpen, setModalOpen] = useState(false);
   const [editCliente, setEditCliente] = useState<any>(null);
+  const { askConfirm, confirmDialog } = useConfirmDialog();
 
   const { data, isLoading } = useQuery({
     queryKey: ['clientes', busqueda, pagina],
@@ -129,7 +131,20 @@ export default function ClientesPage() {
                   <div style={{ display: 'flex', gap: 'var(--sp-2)' }}>
                     <button className="btn btn-ghost btn-icon btn-icon-sm" onClick={() => navigate(`/clientes/${c.id}`)} data-tooltip="Ver detalle"><Eye size={14} /></button>
                     <button className="btn btn-ghost btn-icon btn-icon-sm" onClick={() => handleEdit(c)} data-tooltip="Editar"><Edit size={14} /></button>
-                    <button className="btn btn-ghost btn-icon btn-icon-sm" style={{ color: 'var(--danger)' }} onClick={() => deleteMutation.mutate(c.id)} data-tooltip="Desactivar"><Trash2 size={14} /></button>
+                    <button
+                      className="btn btn-ghost btn-icon btn-icon-sm"
+                      style={{ color: 'var(--danger)' }}
+                      onClick={() => askConfirm({
+                        title: 'Desactivar cliente',
+                        message: `¿Desactivar a "${c.nombre} ${c.apellido}"? Dejará de aparecer entre los clientes activos, pero su historial y expedientes se conservan.`,
+                        confirmLabel: 'Desactivar',
+                        danger: true,
+                        onConfirm: () => deleteMutation.mutate(c.id),
+                      })}
+                      data-tooltip="Desactivar"
+                    >
+                      <Trash2 size={14} />
+                    </button>
                   </div>
                 </td>
               </tr>
@@ -160,6 +175,7 @@ export default function ClientesPage() {
           }}
         />
       )}
+      {confirmDialog}
     </div>
   );
 }
