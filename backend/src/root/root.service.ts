@@ -96,13 +96,12 @@ export class RootService {
     const existingUser = await this.usuarioRepo.findOne({ where: { email: dto.emailAdmin.toLowerCase() } });
     if (existingUser) throw new ConflictException('El email del administrador ya está en uso');
 
-    // 2. Resolver plan contratado (si viene) para tomar su costo por defecto
-    let planMensual = dto.planMensual || 0;
-    if (dto.planId) {
-      const plan = await this.planRepo.findOne({ where: { id: dto.planId } });
-      if (!plan) throw new NotFoundException('Plan no encontrado');
-      if (!dto.planMensual) planMensual = plan.costoMensualidad;
-    }
+    // 2. El plan es obligatorio: un despacho sin plan queda sin límites definidos y varias
+    // partes del sistema (dashboard, límites de usuarios/expedientes) asumen que existe.
+    if (!dto.planId) throw new BadRequestException('Debes asignar un plan al despacho');
+    const plan = await this.planRepo.findOne({ where: { id: dto.planId } });
+    if (!plan) throw new NotFoundException('Plan no encontrado');
+    const planMensual = dto.planMensual || plan.costoMensualidad;
 
     // 3. Crear despacho
     const despacho = this.despachoRepo.create({

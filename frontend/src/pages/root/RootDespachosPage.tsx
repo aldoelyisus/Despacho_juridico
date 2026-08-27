@@ -59,9 +59,9 @@ function NuevoDespachoModal({ onClose, onSuccess }: any) {
                 <input className="form-input" value={form.telefono} onChange={set('telefono')} />
               </div>
               <div className="form-group">
-                <label className="form-label">Plan</label>
-                <select className="form-select" value={form.planId} onChange={set('planId')}>
-                  <option value="">Sin plan / personalizado</option>
+                <label className="form-label">Plan *</label>
+                <select className="form-select" required value={form.planId} onChange={set('planId')}>
+                  <option value="" disabled>Selecciona un plan</option>
                   {planes?.map((p: any) => (
                     <option key={p.id} value={p.id}>
                       {p.nombre} — ${Number(p.costoMensualidad).toLocaleString('es-MX')} · {p.numeroUsuarios} usuarios
