@@ -10,6 +10,7 @@ import { Plan } from '../planes/entities/plan.entity';
 import { calcularFechaLimiteMensualidad } from '../facturacion/facturacion.util';
 import { AuditoriaService } from '../auditoria/auditoria.service';
 import { evaluatePasswordPolicy } from '../common/validators/password-policy';
+import { generateStrongPassword } from '../common/utils/password-generator';
 
 @Injectable()
 export class RootService {
@@ -189,6 +190,39 @@ export class RootService {
         twoFactorEnabled: true,
       },
     });
+  }
+
+  /** Crea otro usuario root (acceso total, sin despacho). La contraseña se genera
+   *  aleatoriamente y se devuelve una sola vez en la respuesta — no queda registrada
+   *  en ningún log ni se puede volver a consultar después. */
+  async createUsuarioRoot(dto: { nombre: string; apellido: string; email: string }) {
+    const email = dto.email.toLowerCase();
+    const existing = await this.usuarioRepo.findOne({ where: { email } });
+    if (existing) throw new ConflictException('El email ya está en uso');
+
+    const rootRol = await this.rolRepo.findOne({ where: { nombre: 'root' } });
+    if (!rootRol) throw new NotFoundException('Rol root no encontrado');
+
+    const password = generateStrongPassword();
+    const hash = await bcrypt.hash(password, 12);
+
+    const usuario = this.usuarioRepo.create({
+      despachoId: null as any,
+      rolId: rootRol.id,
+      nombre: dto.nombre,
+      apellido: dto.apellido,
+      email,
+      password: hash,
+    });
+    const saved = await this.usuarioRepo.save(usuario);
+
+    return {
+      id: saved.id,
+      nombre: saved.nombre,
+      apellido: saved.apellido,
+      email: saved.email,
+      password,
+    };
   }
 
   async toggleUsuario(id: number) {

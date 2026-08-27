@@ -46,6 +46,12 @@ export class RootController {
   }
 
   // ── USUARIOS ──────────────────────────────────────────────────────────────
+  @Post('usuarios-root')
+  @ApiOperation({ summary: 'Crear otro usuario root (acceso total al sistema, sin despacho)' })
+  createUsuarioRoot(@Body() dto: { nombre: string; apellido: string; email: string }) {
+    return this.service.createUsuarioRoot(dto);
+  }
+
   @Get('despachos/:id/usuarios')
   @ApiOperation({ summary: 'Usuarios de un despacho' })
   getUsuariosDespacho(@Param('id', ParseIntPipe) id: number) {
