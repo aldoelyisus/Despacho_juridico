@@ -8,20 +8,21 @@ import {
 import { useAuthStore } from '../../stores/authStore';
 import { despachoApi } from '../../api/despacho.api';
 import { authApi } from '../../api/auth.api';
+import { useRol, puedeVer, type Modulo } from '../../utils/permisos';
 import './Sidebar.css';
 
 const normalNavItems = [
   { to: '/dashboard',    icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/clientes',     icon: Users,           label: 'Clientes' },
-  { to: '/expedientes',  icon: FolderOpen,      label: 'Expedientes' },
-  { to: '/agenda',       icon: Calendar,        label: 'Agenda' },
-  { to: '/pagos',        icon: CreditCard,      label: 'Pagos' },
+  { to: '/clientes',     icon: Users,           label: 'Clientes',      modulo: 'clientes' as Modulo },
+  { to: '/expedientes',  icon: FolderOpen,      label: 'Expedientes',   modulo: 'expedientes' as Modulo },
+  { to: '/agenda',       icon: Calendar,        label: 'Agenda',        modulo: 'agenda' as Modulo },
+  { to: '/pagos',        icon: CreditCard,      label: 'Pagos',         modulo: 'pagos' as Modulo },
   { separator: true },
-  { to: '/catalogos',    icon: BookOpen,        label: 'Catálogos' },
-  { to: '/descuentos',   icon: Tag,             label: 'Descuentos' },
-  { to: '/usuarios',     icon: UserCog,         label: 'Usuarios' },
-  { to: '/auditoria',    icon: Activity,        label: 'Auditoría' },
-  { to: '/configuracion',icon: Settings,        label: 'Configuración' },
+  { to: '/catalogos',    icon: BookOpen,        label: 'Catálogos',     modulo: 'catalogos' as Modulo },
+  { to: '/descuentos',   icon: Tag,             label: 'Descuentos',    modulo: 'descuentos' as Modulo },
+  { to: '/usuarios',     icon: UserCog,         label: 'Usuarios',      modulo: 'usuarios' as Modulo },
+  { to: '/auditoria',    icon: Activity,        label: 'Auditoría',     modulo: 'auditoria' as Modulo },
+  { to: '/configuracion',icon: Settings,        label: 'Configuración', modulo: 'configuracion' as Modulo },
 ];
 
 const rootNavItems = [
@@ -42,8 +43,15 @@ interface Props {
 export default function Sidebar({ collapsed, onToggle }: Props) {
   const { usuario, logout } = useAuthStore();
   const navigate = useNavigate();
+  const rol = useRol();
   const isRoot = usuario?.rol?.nombre?.toLowerCase() === 'root';
-  const navItems = isRoot ? rootNavItems : normalNavItems;
+  const navItems = isRoot
+    ? rootNavItems
+    : normalNavItems
+        .filter((item) => !item.modulo || puedeVer(rol, item.modulo))
+        // Si el separador quedó al final (ej: rol sin acceso a nada de la segunda sección),
+        // no dejamos una línea divisoria colgando sin nada después.
+        .filter((item, i, arr) => !('separator' in item) || i < arr.length - 1);
 
   const handleLogout = async () => {
     await authApi.logout().catch(() => {}); // borra las cookies httpOnly del lado servidor

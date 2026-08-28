@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './stores/authStore';
 import { authApi } from './api/auth.api';
+import { usePuedeVer, type Modulo } from './utils/permisos';
 import Layout from './components/layout/Layout';
 import LandingPage from './pages/landing/LandingPage';
 import LoginPage from './pages/auth/LoginPage';
@@ -60,6 +61,15 @@ function NormalRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+// Además de autenticado y no-root (ya cubierto por NormalRoute), exige que el rol del usuario
+// tenga acceso a este módulo — así alguien no puede entrar a una página escribiendo la URL
+// directamente aunque el link esté oculto en el menú.
+function ModuloRoute({ modulo, children }: { modulo: Modulo; children: React.ReactNode }) {
+  const puedeVer = usePuedeVer(modulo);
+  if (!puedeVer) return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
+}
+
 export default function App() {
   useEffect(() => {
     authApi.me()
@@ -98,11 +108,11 @@ export default function App() {
         <Route path="/expedientes/:id"  element={<ExpedienteDetallePage />} />
         <Route path="/agenda"           element={<AgendaPage />} />
         <Route path="/pagos"            element={<PagosPage />} />
-        <Route path="/usuarios"         element={<UsuariosPage />} />
-        <Route path="/catalogos"        element={<CatalogosPage />} />
-        <Route path="/descuentos"       element={<DescuentosPage />} />
-        <Route path="/auditoria"        element={<AuditoriaPage />} />
-        <Route path="/configuracion"    element={<ConfiguracionPage />} />
+        <Route path="/usuarios"         element={<ModuloRoute modulo="usuarios"><UsuariosPage /></ModuloRoute>} />
+        <Route path="/catalogos"        element={<ModuloRoute modulo="catalogos"><CatalogosPage /></ModuloRoute>} />
+        <Route path="/descuentos"       element={<ModuloRoute modulo="descuentos"><DescuentosPage /></ModuloRoute>} />
+        <Route path="/auditoria"        element={<ModuloRoute modulo="auditoria"><AuditoriaPage /></ModuloRoute>} />
+        <Route path="/configuracion"    element={<ModuloRoute modulo="configuracion"><ConfiguracionPage /></ModuloRoute>} />
         <Route path="/perfil"           element={<PerfilPage />} />
       </Route>
 

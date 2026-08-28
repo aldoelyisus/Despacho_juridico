@@ -6,9 +6,13 @@ import { descuentosApi } from '../../api/descuentos.api';
 import { getErrorMessage } from '../../utils/errors';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import DescuentoModal from './DescuentoModal';
+import { usePuede } from '../../utils/permisos';
 
 export default function DescuentosPage() {
   const qc = useQueryClient();
+  const puedeCrear = usePuede('descuentos', 'crear');
+  const puedeEditar = usePuede('descuentos', 'editar');
+  const puedeEliminar = usePuede('descuentos', 'eliminar');
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const { askConfirm, confirmDialog } = useConfirmDialog();
@@ -35,9 +39,11 @@ export default function DescuentosPage() {
           <h1 className="page-title">Catálogo de Descuentos</h1>
           <p className="page-subtitle">Define descuentos para aplicar a los cobros de clientes</p>
         </div>
-        <button className="btn btn-primary" onClick={() => { setEditing(null); setModalOpen(true); }}>
-          <Plus size={16} /> Nuevo Descuento
-        </button>
+        {puedeCrear && (
+          <button className="btn btn-primary" onClick={() => { setEditing(null); setModalOpen(true); }}>
+            <Plus size={16} /> Nuevo Descuento
+          </button>
+        )}
       </div>
 
       <div className="card">
@@ -92,28 +98,32 @@ export default function DescuentosPage() {
                     </td>
                     <td>
                       <div style={{ display: 'flex', gap: 'var(--sp-2)' }}>
-                        <button
-                          className="btn btn-ghost btn-icon btn-icon-sm"
-                          onClick={() => { setEditing(d); setModalOpen(true); }}
-                          data-tooltip="Editar"
-                        >
-                          <Pencil size={14} />
-                        </button>
-                        <button
-                          className="btn btn-ghost btn-icon btn-icon-sm"
-                          style={{ color: 'var(--danger)' }}
-                          disabled={deleteM.isPending}
-                          onClick={() => askConfirm({
-                            title: 'Eliminar descuento',
-                            message: `¿Eliminar el descuento "${d.nombre}"? Esta acción no se puede deshacer. Si ya se usó en algún pago, no podrá eliminarse.`,
-                            confirmLabel: 'Eliminar',
-                            danger: true,
-                            onConfirm: () => deleteM.mutate(d.id),
-                          })}
-                          data-tooltip="Eliminar"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        {puedeEditar && (
+                          <button
+                            className="btn btn-ghost btn-icon btn-icon-sm"
+                            onClick={() => { setEditing(d); setModalOpen(true); }}
+                            data-tooltip="Editar"
+                          >
+                            <Pencil size={14} />
+                          </button>
+                        )}
+                        {puedeEliminar && (
+                          <button
+                            className="btn btn-ghost btn-icon btn-icon-sm"
+                            style={{ color: 'var(--danger)' }}
+                            disabled={deleteM.isPending}
+                            onClick={() => askConfirm({
+                              title: 'Eliminar descuento',
+                              message: `¿Eliminar el descuento "${d.nombre}"? Esta acción no se puede deshacer. Si ya se usó en algún pago, no podrá eliminarse.`,
+                              confirmLabel: 'Eliminar',
+                              danger: true,
+                              onConfirm: () => deleteM.mutate(d.id),
+                            })}
+                            data-tooltip="Eliminar"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -125,9 +135,11 @@ export default function DescuentosPage() {
                         <Tag size={40} style={{ opacity: 0.3 }} />
                         <h3>Sin descuentos registrados</h3>
                         <p>Crea tu primer descuento para aplicarlo a los cobros</p>
-                        <button className="btn btn-primary" onClick={() => { setEditing(null); setModalOpen(true); }}>
-                          <Plus size={16} /> Nuevo Descuento
-                        </button>
+                        {puedeCrear && (
+                          <button className="btn btn-primary" onClick={() => { setEditing(null); setModalOpen(true); }}>
+                            <Plus size={16} /> Nuevo Descuento
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

@@ -13,6 +13,7 @@ import { CambiarEstadoExpedienteDto } from './dto/cambiar-estado-expediente.dto'
 import { CreateDocumentoDto } from './dto/create-documento.dto';
 import { CreateObservacionDto } from './dto/create-observacion.dto';
 import { CreateEventoDto } from './dto/create-evento.dto';
+import { Roles, RolEnum } from '../common/decorators/roles.decorator';
 
 @ApiTags('📁 Expedientes')
 @ApiBearerAuth('JWT-auth')
@@ -46,6 +47,7 @@ export class ExpedientesController {
   }
 
   @Post()
+  @Roles(RolEnum.ABOGADO, RolEnum.ASISTENTE)
   @ApiOperation({ summary: 'Crear expediente' })
   @ApiResponse({ status: 400, description: 'Datos inválidos (título vacío, sin clientes asociados, etc.)' })
   @ApiResponse({ status: 403, description: 'El despacho alcanzó el límite de expedientes de su plan' })
@@ -54,6 +56,7 @@ export class ExpedientesController {
   }
 
   @Patch(':id')
+  @Roles(RolEnum.ABOGADO, RolEnum.ASISTENTE)
   @ApiOperation({ summary: 'Actualizar expediente' })
   @ApiResponse({ status: 400, description: 'Datos inválidos' })
   @ApiResponse({ status: 404, description: 'Expediente no encontrado o sin acceso' })
@@ -66,6 +69,7 @@ export class ExpedientesController {
   }
 
   @Patch(':id/estado')
+  @Roles(RolEnum.ABOGADO, RolEnum.ASISTENTE)
   @ApiOperation({ summary: 'Cambiar estado del expediente' })
   @ApiResponse({ status: 400, description: 'Estado inválido' })
   @ApiResponse({ status: 404, description: 'Expediente no encontrado o sin acceso' })
@@ -79,6 +83,7 @@ export class ExpedientesController {
   }
 
   @Post(':id/documentos')
+  @Roles(RolEnum.ABOGADO, RolEnum.ASISTENTE)
   @ApiOperation({ summary: 'Subir documento al expediente (se guarda en S3, bajo despacho/cliente/expediente)' })
   @ApiConsumes('multipart/form-data')
   @ApiResponse({ status: 400, description: 'No se envió ningún archivo' })
@@ -110,6 +115,7 @@ export class ExpedientesController {
   }
 
   @Delete(':id/documentos/:documentoId')
+  @Roles(RolEnum.ABOGADO, RolEnum.ASISTENTE)
   @ApiOperation({ summary: 'Eliminar un documento (borra el archivo de S3 y su referencia)' })
   @ApiResponse({ status: 404, description: 'Expediente o documento no encontrado' })
   deleteDocumento(
@@ -121,6 +127,7 @@ export class ExpedientesController {
   }
 
   @Post(':id/observaciones')
+  @Roles(RolEnum.ABOGADO, RolEnum.ASISTENTE)
   @ApiOperation({ summary: 'Agregar observación al expediente' })
   @ApiResponse({ status: 400, description: 'La observación no puede estar vacía' })
   @ApiResponse({ status: 404, description: 'Expediente no encontrado o sin acceso' })
@@ -133,6 +140,7 @@ export class ExpedientesController {
   }
 
   @Post(':id/eventos')
+  @Roles(RolEnum.ABOGADO, RolEnum.ASISTENTE)
   @ApiOperation({ summary: 'Agregar fecha/evento al expediente' })
   @ApiResponse({ status: 400, description: 'Datos inválidos (título/fecha faltante o fecha de fin anterior a la de inicio)' })
   @ApiResponse({ status: 404, description: 'Expediente no encontrado o sin acceso' })

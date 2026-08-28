@@ -7,6 +7,7 @@ import { DescuentosService } from './descuentos.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { CreateDescuentoDto } from './dto/create-descuento.dto';
 import { UpdateDescuentoDto } from './dto/update-descuento.dto';
+import { Roles, RolEnum } from '../common/decorators/roles.decorator';
 
 @ApiTags('🏷️ Descuentos')
 @ApiBearerAuth('JWT-auth')
@@ -15,6 +16,7 @@ export class DescuentosController {
   constructor(private readonly service: DescuentosService) {}
 
   @Get()
+  @Roles(RolEnum.CONTADOR)
   @ApiOperation({ summary: 'Listar catálogo de descuentos' })
   @ApiQuery({ name: 'activos', required: false, description: '"true" para listar solo los descuentos activos' })
   findAll(
@@ -25,6 +27,7 @@ export class DescuentosController {
   }
 
   @Post()
+  @Roles(RolEnum.ADMIN)
   @ApiOperation({ summary: 'Crear descuento' })
   @ApiResponse({ status: 400, description: 'Datos inválidos (nombre vacío, valor inválido o porcentaje mayor a 100%)' })
   @ApiResponse({ status: 409, description: 'Ya existe un descuento con el mismo nombre' })
@@ -33,6 +36,7 @@ export class DescuentosController {
   }
 
   @Patch(':id')
+  @Roles(RolEnum.ADMIN)
   @ApiOperation({ summary: 'Actualizar descuento' })
   @ApiResponse({ status: 400, description: 'Datos inválidos' })
   @ApiResponse({ status: 404, description: 'Descuento no encontrado' })
@@ -46,6 +50,7 @@ export class DescuentosController {
   }
 
   @Delete(':id')
+  @Roles(RolEnum.ADMIN)
   @ApiOperation({ summary: 'Eliminar descuento del catálogo' })
   @ApiResponse({ status: 404, description: 'Descuento no encontrado' })
   @ApiResponse({ status: 409, description: 'El descuento ya se usó en pagos registrados; desactívalo en su lugar' })

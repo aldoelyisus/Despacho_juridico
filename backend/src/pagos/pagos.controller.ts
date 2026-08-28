@@ -4,6 +4,7 @@ import { PagosService } from './pagos.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { CreatePagoDto } from './dto/create-pago.dto';
 import { CreateAbonoDto } from './dto/create-abono.dto';
+import { Roles, RolEnum } from '../common/decorators/roles.decorator';
 
 @ApiTags('💳 Pagos')
 @ApiBearerAuth('JWT-auth')
@@ -40,6 +41,7 @@ export class PagosController {
   }
 
   @Post()
+  @Roles(RolEnum.CONTADOR)
   @ApiOperation({ summary: 'Registrar el cobro (adeudo del cliente) por un servicio, con un único descuento opcional' })
   @ApiResponse({ status: 400, description: 'Datos inválidos o descuento inactivo' })
   @ApiResponse({ status: 404, description: 'Cliente, expediente o servicio no encontrado en el despacho' })
@@ -48,6 +50,7 @@ export class PagosController {
   }
 
   @Post(':id/abonos')
+  @Roles(RolEnum.CONTADOR)
   @ApiOperation({ summary: 'Registrar el pago (el dinero que el cliente efectivamente entrega) contra un cobro. No se permiten abonos parciales: debe cubrir el saldo pendiente completo' })
   @ApiResponse({ status: 400, description: 'Datos inválidos, cobro ya pagado/cancelado, o el monto no cubre exactamente el saldo pendiente' })
   @ApiResponse({ status: 404, description: 'Cobro no encontrado' })

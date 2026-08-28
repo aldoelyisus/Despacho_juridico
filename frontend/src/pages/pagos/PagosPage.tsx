@@ -8,6 +8,7 @@ import AbonoModal from './AbonoModal';
 import ReciboModal from './ReciboModal';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { usePuede } from '../../utils/permisos';
 
 const ESTADO_COLORS: Record<string, string> = {
   pendiente: 'badge-warning', parcial: 'badge-info',
@@ -23,6 +24,7 @@ function money(v: any) {
 
 export default function PagosPage() {
   const qc = useQueryClient();
+  const puedeCrear = usePuede('pagos', 'crear');
   const [modalOpen, setModalOpen] = useState(false);
   const [abonoModal, setAbonoModal] = useState<any>(null);
   const [recibo, setRecibo] = useState<{ pago: any; abono: any } | null>(null);
@@ -52,9 +54,11 @@ export default function PagosPage() {
           <h1 className="page-title">Pagos</h1>
           <p className="page-subtitle">Gestión de cobros y comprobantes</p>
         </div>
-        <button id="nuevo-pago-btn" className="btn btn-primary" onClick={() => setModalOpen(true)}>
-          <Plus size={16} /> Registrar Cobro
-        </button>
+        {puedeCrear && (
+          <button id="nuevo-pago-btn" className="btn btn-primary" onClick={() => setModalOpen(true)}>
+            <Plus size={16} /> Registrar Cobro
+          </button>
+        )}
       </div>
 
       {/* Stats */}
@@ -127,7 +131,9 @@ export default function PagosPage() {
                   <CreditCard size={40} style={{ opacity: 0.3 }} />
                   <h3>Sin cobros registrados</h3>
                   <p>Registra el primer cobro para empezar a llevar el control de pagos</p>
-                  <button className="btn btn-primary" onClick={() => setModalOpen(true)}><Plus size={16} /> Registrar Cobro</button>
+                  {puedeCrear && (
+                    <button className="btn btn-primary" onClick={() => setModalOpen(true)}><Plus size={16} /> Registrar Cobro</button>
+                  )}
                 </div>
               </td></tr>
             ) : data?.items?.map((p: any) => {
@@ -160,7 +166,7 @@ export default function PagosPage() {
                     </td>
                     <td><span className={`badge ${ESTADO_COLORS[p.estado] || 'badge-muted'}`}>{ESTADO_LABELS[p.estado] || p.estado}</span></td>
                     <td>
-                      {puedeAbonar && (
+                      {puedeAbonar && puedeCrear && (
                         <button className="btn btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); setAbonoModal(p); }}>
                           <Plus size={12} /> Abono
                         </button>

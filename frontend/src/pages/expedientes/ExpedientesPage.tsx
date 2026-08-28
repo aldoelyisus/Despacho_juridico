@@ -6,6 +6,7 @@ import { expedientesApi } from '../../api/expedientes.api';
 import { clientesApi } from '../../api/clientes.api';
 import ExpedienteModal from './ExpedienteModal';
 import Pagination from '../../components/Pagination';
+import { usePuede } from '../../utils/permisos';
 
 const ESTADO_COLORS: Record<string, string> = {
   consulta: 'badge-accent', activo: 'badge-info', ganado: 'badge-success',
@@ -66,6 +67,8 @@ function LimiteAlcanzadoModal({ limite, onClose }: { limite: number; onClose: ()
 export default function ExpedientesPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const puedeCrear = usePuede('expedientes', 'crear');
+  const puedeEditar = usePuede('expedientes', 'editar');
   const [busqueda, setBusqueda] = useState('');
   const [estadoFilter, setEstadoFilter] = useState('');
   const [clienteFilter, setClienteFilter] = useState('');
@@ -112,9 +115,11 @@ export default function ExpedientesPage() {
           <h1 className="page-title">Expedientes</h1>
           <p className="page-subtitle">{data?.total || 0} expedientes totales</p>
         </div>
-        <button id="nuevo-expediente-btn" className="btn btn-primary" onClick={handleNuevoExpediente}>
-          <Plus size={16} /> Nuevo Expediente
-        </button>
+        {puedeCrear && (
+          <button id="nuevo-expediente-btn" className="btn btn-primary" onClick={handleNuevoExpediente}>
+            <Plus size={16} /> Nuevo Expediente
+          </button>
+        )}
       </div>
 
       {limiteExpedientes !== null && (
@@ -191,7 +196,9 @@ export default function ExpedientesPage() {
                   <FolderOpen size={40} style={{ opacity: 0.3 }} />
                   <h3>No hay expedientes</h3>
                   <p>Crea el primer expediente del despacho</p>
-                  <button className="btn btn-primary" onClick={handleNuevoExpediente}><Plus size={16} /> Nuevo Expediente</button>
+                  {puedeCrear && (
+                    <button className="btn btn-primary" onClick={handleNuevoExpediente}><Plus size={16} /> Nuevo Expediente</button>
+                  )}
                 </div>
               </td></tr>
             ) : data?.items?.map((e: any) => (
@@ -213,7 +220,9 @@ export default function ExpedientesPage() {
                 <td>
                   <div style={{ display: 'flex', gap: 'var(--sp-2)' }}>
                     <button className="btn btn-ghost btn-icon btn-icon-sm" onClick={() => navigate(`/expedientes/${e.id}`)} data-tooltip="Ver detalle"><Eye size={14} /></button>
-                    <button className="btn btn-ghost btn-icon btn-icon-sm" onClick={() => { setEditExp(e); setModalOpen(true); }} data-tooltip="Editar"><Edit size={14} /></button>
+                    {puedeEditar && (
+                      <button className="btn btn-ghost btn-icon btn-icon-sm" onClick={() => { setEditExp(e); setModalOpen(true); }} data-tooltip="Editar"><Edit size={14} /></button>
+                    )}
                   </div>
                 </td>
               </tr>

@@ -17,6 +17,7 @@ import PagoModal from '../pagos/PagoModal';
 import AbonoModal from '../pagos/AbonoModal';
 import ReciboModal from '../pagos/ReciboModal';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
+import { usePuede } from '../../utils/permisos';
 
 const ESTADO_COLORS: Record<string, string> = {
   consulta: 'badge-accent', activo: 'badge-info', ganado: 'badge-success',
@@ -145,6 +146,8 @@ export default function ExpedienteDetallePage() {
   const [expandedPagoId, setExpandedPagoId] = useState<number | null>(null);
   const [verDocumentoId, setVerDocumentoId] = useState<number | null>(null);
   const { askConfirm, confirmDialog } = useConfirmDialog();
+  const puedeEditarExpediente = usePuede('expedientes', 'editar');
+  const puedeRegistrarPago = usePuede('pagos', 'crear');
 
   const { data: exp, isLoading } = useQuery({
     queryKey: ['expediente', id],
@@ -254,10 +257,12 @@ export default function ExpedienteDetallePage() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
-          <button className="btn btn-secondary btn-sm" onClick={() => setEditModalOpen(true)}>
-            <Pencil size={14} /> Editar
-          </button>
-          {(TRANSICIONES_ESTADO[exp.estado] || []).length > 0 && (
+          {puedeEditarExpediente && (
+            <button className="btn btn-secondary btn-sm" onClick={() => setEditModalOpen(true)}>
+              <Pencil size={14} /> Editar
+            </button>
+          )}
+          {puedeEditarExpediente && (TRANSICIONES_ESTADO[exp.estado] || []).length > 0 && (
             <select className="form-select" value={exp.estado} disabled={estadoM.isPending}
               onChange={(e) => {
                 const nuevoEstado = e.target.value;
@@ -333,9 +338,11 @@ export default function ExpedienteDetallePage() {
                 <h3 style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <CreditCard size={16} style={{ color: 'var(--accent-400)' }} /> Servicios y cobros
                 </h3>
-                <button className="btn btn-primary btn-sm" onClick={() => setPagoModalOpen(true)}>
-                  <Plus size={14} /> Agregar servicio
-                </button>
+                {puedeRegistrarPago && (
+                  <button className="btn btn-primary btn-sm" onClick={() => setPagoModalOpen(true)}>
+                    <Plus size={14} /> Agregar servicio
+                  </button>
+                )}
               </div>
               <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: 'var(--sp-4)' }}>
                 Cada servicio agregado (honorarios, consulta, audiencia, etc.) genera un cobro independiente que se suma al costo total del expediente.
@@ -367,7 +374,7 @@ export default function ExpedienteDetallePage() {
                             <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>{money(p.montoTotal)}</div>
                             <span className={`badge ${PAGO_ESTADO_COLORS[p.estado] || 'badge-muted'}`}>{PAGO_ESTADO_LABELS[p.estado] || p.estado}</span>
                           </div>
-                          {puedeAbonar && (
+                          {puedeAbonar && puedeRegistrarPago && (
                             <button className="btn btn-ghost btn-sm" onClick={() => setAbonoModal(p)}>
                               <Plus size={12} /> Abono
                             </button>
@@ -412,11 +419,13 @@ export default function ExpedienteDetallePage() {
             <div className="card">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--sp-4)' }}>
                 <h3>Documentos ({exp.documentos?.length || 0})</h3>
-                <label className="btn btn-primary btn-sm" style={{ cursor: 'pointer' }}>
-                  {fileM.isPending ? <Loader2 size={14} className="spinning" /> : <Upload size={14} />} Subir archivo
-                  <input type="file" style={{ display: 'none' }} multiple disabled={fileM.isPending}
-                    onChange={(e) => { if (e.target.files) Array.from(e.target.files).forEach(f => fileM.mutate(f)); e.target.value = ''; }} />
-                </label>
+                {puedeEditarExpediente && (
+                  <label className="btn btn-primary btn-sm" style={{ cursor: 'pointer' }}>
+                    {fileM.isPending ? <Loader2 size={14} className="spinning" /> : <Upload size={14} />} Subir archivo
+                    <input type="file" style={{ display: 'none' }} multiple disabled={fileM.isPending}
+                      onChange={(e) => { if (e.target.files) Array.from(e.target.files).forEach(f => fileM.mutate(f)); e.target.value = ''; }} />
+                  </label>
+                )}
               </div>
               {exp.documentos?.length ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-2)' }}>
@@ -439,14 +448,16 @@ export default function ExpedienteDetallePage() {
                         >
                           {verDocumentoId === d.id ? <Loader2 size={14} className="spinning" /> : 'Ver'}
                         </button>
-                        <button
-                          className="btn btn-ghost btn-icon btn-icon-sm"
-                          disabled={deleteDocM.isPending}
-                          onClick={() => handleEliminarDocumento(d)}
-                          data-tooltip="Eliminar documento"
-                        >
-                          <Trash2 size={14} style={{ color: 'var(--danger)' }} />
-                        </button>
+                        {puedeEditarExpediente && (
+                          <button
+                            className="btn btn-ghost btn-icon btn-icon-sm"
+                            disabled={deleteDocM.isPending}
+                            onClick={() => handleEliminarDocumento(d)}
+                            data-tooltip="Eliminar documento"
+                          >
+                            <Trash2 size={14} style={{ color: 'var(--danger)' }} />
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -464,13 +475,15 @@ export default function ExpedienteDetallePage() {
           {activeTab === 'observaciones' && (
             <div className="card">
               <h3 style={{ marginBottom: 'var(--sp-4)' }}>Observaciones</h3>
-              <div style={{ display: 'flex', gap: 'var(--sp-2)', marginBottom: 'var(--sp-4)' }}>
-                <textarea className="form-textarea" value={observacion} onChange={(e) => setObservacion(e.target.value)}
-                  placeholder="Escribe una observación..." rows={2} style={{ flex: 1, minHeight: 60 }} />
-                <button className="btn btn-primary" onClick={() => observacion.trim() && obsM.mutate(observacion)} disabled={obsM.isPending || !observacion.trim()}>
-                  {obsM.isPending ? <Loader2 size={16} className="spinning" /> : <Send size={16} />}
-                </button>
-              </div>
+              {puedeEditarExpediente && (
+                <div style={{ display: 'flex', gap: 'var(--sp-2)', marginBottom: 'var(--sp-4)' }}>
+                  <textarea className="form-textarea" value={observacion} onChange={(e) => setObservacion(e.target.value)}
+                    placeholder="Escribe una observación..." rows={2} style={{ flex: 1, minHeight: 60 }} />
+                  <button className="btn btn-primary" onClick={() => observacion.trim() && obsM.mutate(observacion)} disabled={obsM.isPending || !observacion.trim()}>
+                    {obsM.isPending ? <Loader2 size={16} className="spinning" /> : <Send size={16} />}
+                  </button>
+                </div>
+              )}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' }}>
                 {[...(exp.observaciones || [])].reverse().map((o: any) => (
                   <div key={o.id} style={{ padding: 'var(--sp-4)', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
@@ -498,11 +511,13 @@ export default function ExpedienteDetallePage() {
             <div className="card">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--sp-4)' }}>
                 <h3 style={{ display: 'flex', alignItems: 'center', gap: 6 }}><CalendarDays size={16} style={{ color: 'var(--accent-400)' }} /> Agenda del expediente</h3>
-                <button className="btn btn-primary btn-sm" onClick={() => setShowEventForm(!showEventForm)}>
-                  <Calendar size={14} /> Agregar evento
-                </button>
+                {puedeEditarExpediente && (
+                  <button className="btn btn-primary btn-sm" onClick={() => setShowEventForm(!showEventForm)}>
+                    <Calendar size={14} /> Agregar evento
+                  </button>
+                )}
               </div>
-              {showEventForm && (
+              {puedeEditarExpediente && showEventForm && (
                 <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)', padding: 'var(--sp-4)', marginBottom: 'var(--sp-4)' }}>
                   <div className="form-grid-2">
                     <div className="form-group" style={{ gridColumn: '1 / -1' }}>

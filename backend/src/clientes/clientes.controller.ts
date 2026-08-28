@@ -7,6 +7,7 @@ import { ClientesService } from './clientes.service';
 import { CreateClienteDto } from './dto/create-cliente.dto';
 import { UpdateClienteDto } from './dto/update-cliente.dto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { Roles, RolEnum } from '../common/decorators/roles.decorator';
 
 @ApiTags('👥 Clientes')
 @ApiBearerAuth('JWT-auth')
@@ -42,6 +43,7 @@ export class ClientesController {
   }
 
   @Post()
+  @Roles(RolEnum.ABOGADO, RolEnum.ASISTENTE)
   @ApiOperation({ summary: 'Crear nuevo cliente' })
   @ApiResponse({ status: 201, description: 'Cliente creado' })
   @ApiResponse({ status: 400, description: 'Datos inválidos' })
@@ -51,6 +53,7 @@ export class ClientesController {
   }
 
   @Patch(':id')
+  @Roles(RolEnum.ABOGADO, RolEnum.ASISTENTE)
   @ApiOperation({ summary: 'Actualizar cliente' })
   @ApiResponse({ status: 400, description: 'Datos inválidos' })
   @ApiResponse({ status: 404, description: 'Cliente no encontrado' })
@@ -64,6 +67,7 @@ export class ClientesController {
   }
 
   @Delete(':id')
+  @Roles(RolEnum.ABOGADO)
   @ApiOperation({ summary: 'Desactivar cliente' })
   @ApiResponse({ status: 404, description: 'Cliente no encontrado' })
   remove(@Param('id', ParseIntPipe) id: number, @CurrentUser('despachoId') despachoId: number) {

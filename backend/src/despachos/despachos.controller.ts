@@ -9,6 +9,7 @@ import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { DespachosService } from './despachos.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { Roles, RolEnum } from '../common/decorators/roles.decorator';
 
 @ApiTags('🏢 Despachos')
 @ApiBearerAuth('JWT-auth')
@@ -23,6 +24,7 @@ export class DespachosController {
   }
 
   @Patch('mi-despacho')
+  @Roles(RolEnum.ADMIN)
   @ApiOperation({ summary: 'Actualizar información del despacho' })
   updateMiDespacho(
     @CurrentUser('despachoId') despachoId: number,
@@ -32,6 +34,7 @@ export class DespachosController {
   }
 
   @Post('mi-despacho/logo')
+  @Roles(RolEnum.ADMIN)
   @ApiOperation({ summary: 'Subir logo del despacho' })
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(

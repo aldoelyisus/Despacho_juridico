@@ -8,6 +8,7 @@ import { UpdateSubareaDto } from './dto/update-subarea.dto';
 import { CreateServicioDto } from './dto/create-servicio.dto';
 import { UpdateServicioDto } from './dto/update-servicio.dto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { Roles, RolEnum } from '../common/decorators/roles.decorator';
 
 @ApiTags('📚 Catálogos')
 @ApiBearerAuth('JWT-auth')
@@ -31,6 +32,7 @@ export class CatalogosController {
   }
 
   @Post('areas')
+  @Roles(RolEnum.ADMIN)
   @ApiOperation({ summary: 'Crear área del derecho' })
   @ApiResponse({ status: 400, description: 'Datos inválidos' })
   @ApiResponse({ status: 409, description: 'Ya existe un área con el mismo nombre' })
@@ -39,6 +41,7 @@ export class CatalogosController {
   }
 
   @Patch('areas/:id')
+  @Roles(RolEnum.ADMIN)
   @ApiOperation({ summary: 'Actualizar área' })
   @ApiResponse({ status: 400, description: 'Datos inválidos' })
   @ApiResponse({ status: 404, description: 'Área no encontrada' })
@@ -52,6 +55,7 @@ export class CatalogosController {
   }
 
   @Delete('areas/:id')
+  @Roles(RolEnum.ADMIN)
   @ApiOperation({ summary: 'Desactivar área' })
   @ApiResponse({ status: 404, description: 'Área no encontrada' })
   @ApiResponse({ status: 409, description: 'El área tiene subáreas activas o expedientes vinculados' })
@@ -79,6 +83,7 @@ export class CatalogosController {
   }
 
   @Post('subareas')
+  @Roles(RolEnum.ADMIN)
   @ApiOperation({ summary: 'Crear subárea' })
   @ApiResponse({ status: 400, description: 'Datos inválidos' })
   @ApiResponse({ status: 404, description: 'El área seleccionada no existe' })
@@ -88,6 +93,7 @@ export class CatalogosController {
   }
 
   @Patch('subareas/:id')
+  @Roles(RolEnum.ADMIN)
   @ApiOperation({ summary: 'Actualizar subárea' })
   @ApiResponse({ status: 400, description: 'Datos inválidos' })
   @ApiResponse({ status: 404, description: 'Subárea o área no encontrada' })
@@ -101,6 +107,7 @@ export class CatalogosController {
   }
 
   @Delete('subareas/:id')
+  @Roles(RolEnum.ADMIN)
   @ApiOperation({ summary: 'Desactivar subárea' })
   @ApiResponse({ status: 404, description: 'Subárea no encontrada' })
   @ApiResponse({ status: 409, description: 'La subárea tiene expedientes vinculados' })
@@ -119,6 +126,7 @@ export class CatalogosController {
   }
 
   @Post('servicios')
+  @Roles(RolEnum.ADMIN)
   @ApiOperation({ summary: 'Registrar un servicio legal y su precio' })
   @ApiResponse({ status: 400, description: 'Datos inválidos (nombre vacío o costo negativo/no numérico)' })
   @ApiResponse({ status: 409, description: 'Ya existe un servicio con el mismo nombre en el despacho' })
@@ -127,6 +135,7 @@ export class CatalogosController {
   }
 
   @Patch('servicios/:id')
+  @Roles(RolEnum.ADMIN)
   @ApiOperation({ summary: 'Actualizar un servicio legal o su precio' })
   @ApiResponse({ status: 400, description: 'Datos inválidos' })
   @ApiResponse({ status: 404, description: 'Servicio no encontrado' })
@@ -140,6 +149,7 @@ export class CatalogosController {
   }
 
   @Delete('servicios/:id')
+  @Roles(RolEnum.ADMIN)
   @ApiOperation({ summary: 'Desactivar un servicio legal' })
   @ApiResponse({ status: 404, description: 'Servicio no encontrado' })
   @ApiResponse({ status: 409, description: 'El servicio tiene expedientes vinculados' })

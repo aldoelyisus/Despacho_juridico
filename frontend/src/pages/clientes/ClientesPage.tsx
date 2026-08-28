@@ -8,10 +8,14 @@ import ClienteModal from './ClienteModal';
 import Pagination from '../../components/Pagination';
 import { getErrorMessage } from '../../utils/errors';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
+import { usePuede } from '../../utils/permisos';
 
 export default function ClientesPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const puedeCrear = usePuede('clientes', 'crear');
+  const puedeEditar = usePuede('clientes', 'editar');
+  const puedeEliminar = usePuede('clientes', 'eliminar');
   const [busqueda, setBusqueda] = useState('');
   const [pagina, setPagina] = useState(1);
   const [modalOpen, setModalOpen] = useState(false);
@@ -50,9 +54,11 @@ export default function ClientesPage() {
             {stats?.total || 0} clientes registrados
           </p>
         </div>
-        <button id="nuevo-cliente-btn" className="btn btn-primary" onClick={handleNew}>
-          <Plus size={16} /> Nuevo Cliente
-        </button>
+        {puedeCrear && (
+          <button id="nuevo-cliente-btn" className="btn btn-primary" onClick={handleNew}>
+            <Plus size={16} /> Nuevo Cliente
+          </button>
+        )}
       </div>
 
       {/* Stats */}
@@ -106,7 +112,9 @@ export default function ClientesPage() {
                   <div className="empty-icon"><Users size={40} /></div>
                   <h3>No hay clientes</h3>
                   <p>Registra tu primer cliente para comenzar</p>
-                  <button className="btn btn-primary" onClick={handleNew}><Plus size={16} /> Nuevo Cliente</button>
+                  {puedeCrear && (
+                    <button className="btn btn-primary" onClick={handleNew}><Plus size={16} /> Nuevo Cliente</button>
+                  )}
                 </div>
               </td></tr>
             ) : data?.items?.map((c: any) => (
@@ -130,21 +138,25 @@ export default function ClientesPage() {
                 <td>
                   <div style={{ display: 'flex', gap: 'var(--sp-2)' }}>
                     <button className="btn btn-ghost btn-icon btn-icon-sm" onClick={() => navigate(`/clientes/${c.id}`)} data-tooltip="Ver detalle"><Eye size={14} /></button>
-                    <button className="btn btn-ghost btn-icon btn-icon-sm" onClick={() => handleEdit(c)} data-tooltip="Editar"><Edit size={14} /></button>
-                    <button
-                      className="btn btn-ghost btn-icon btn-icon-sm"
-                      style={{ color: 'var(--danger)' }}
-                      onClick={() => askConfirm({
-                        title: 'Desactivar cliente',
-                        message: `¿Desactivar a "${c.nombre} ${c.apellido}"? Dejará de aparecer entre los clientes activos, pero su historial y expedientes se conservan.`,
-                        confirmLabel: 'Desactivar',
-                        danger: true,
-                        onConfirm: () => deleteMutation.mutate(c.id),
-                      })}
-                      data-tooltip="Desactivar"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    {puedeEditar && (
+                      <button className="btn btn-ghost btn-icon btn-icon-sm" onClick={() => handleEdit(c)} data-tooltip="Editar"><Edit size={14} /></button>
+                    )}
+                    {puedeEliminar && (
+                      <button
+                        className="btn btn-ghost btn-icon btn-icon-sm"
+                        style={{ color: 'var(--danger)' }}
+                        onClick={() => askConfirm({
+                          title: 'Desactivar cliente',
+                          message: `¿Desactivar a "${c.nombre} ${c.apellido}"? Dejará de aparecer entre los clientes activos, pero su historial y expedientes se conservan.`,
+                          confirmLabel: 'Desactivar',
+                          danger: true,
+                          onConfirm: () => deleteMutation.mutate(c.id),
+                        })}
+                        data-tooltip="Desactivar"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>

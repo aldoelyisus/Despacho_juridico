@@ -51,6 +51,7 @@ export class UsuariosController {
   }
 
   @Patch(':id')
+  @Roles(RolEnum.ADMIN)
   @ApiOperation({ summary: 'Actualizar usuario' })
   @ApiResponse({ status: 400, description: 'Contraseña débil o datos inválidos' })
   @ApiResponse({ status: 404, description: 'Usuario no encontrado' })
